@@ -1,0 +1,115 @@
+# 🚀 INSTRUÇÕES RÁPIDAS - Upload para GitHub
+
+## ⚡ Método Rápido (Interface Web do GitHub)
+
+### Passo 1: Criar Repositório
+1. Acesse https://github.com/new
+2. Nome: `sistema-rh`
+3. Descrição: "Sistema de Gestão de Funcionários"
+4. Marque "Public"
+5. Clique em "Create repository"
+
+### Passo 2: Fazer Upload dos Arquivos
+1. Na página do repositório criado, clique em "uploading an existing file"
+2. Arraste TODOS os arquivos do projeto:
+   - index.html
+   - README.md
+   - LICENSE
+   - .gitignore
+   - MANUAL.md
+   - DEPLOY.md
+   - CHANGELOG.md
+3. Escreva uma mensagem: "Initial commit - Sistema RH v1.0"
+4. Clique em "Commit changes"
+
+### Passo 3: Ativar GitHub Pages
+1. Vá em Settings → Pages
+2. Source: Branch "main" → Folder "/ (root)"
+3. Clique em "Save"
+4. Aguarde 2 minutos
+
+**✅ Pronto! Acesse em:**
+```
+https://SEU-USUARIO.github.io/sistema-rh
+```
+
+---
+
+## 💻 Método via Terminal (Avançado)
+
+```bash
+# 1. Navegar até a pasta do projeto
+cd caminho/para/pasta
+
+# 2. Inicializar Git
+git init
+
+# 3. Adicionar todos os arquivos
+git add .
+
+# 4. Fazer commit
+git commit -m "Initial commit - Sistema RH v1.0"
+
+# 5. Adicionar repositório remoto (substitua SEU-USUARIO)
+git remote add origin https://github.com/SEU-USUARIO/sistema-rh.git
+
+# 6. Renomear branch
+git branch -M main
+
+# 7. Enviar para GitHub
+git push -u origin main
+```
+
+Depois ative o GitHub Pages nas configurações!
+
+---
+
+## 📱 Estrutura dos Arquivos
+
+```
+sistema-rh/
+├── index.html          ← Arquivo principal do sistema
+├── README.md           ← Documentação do projeto
+├── LICENSE             ← Licença MIT
+├── .gitignore          ← Arquivos ignorados pelo Git
+├── MANUAL.md           ← Manual do usuário
+├── DEPLOY.md           ← Guia completo de deploy
+└── CHANGELOG.md        ← Histórico de versões
+```
+
+---
+
+## ⚠️ ANTES DE PUBLICAR
+
+### Altere as Credenciais!
+
+Abra o arquivo `index.html` e procure por:
+
+```javascript
+// Linha aproximada 233
+if (usuario === 'admin' && senha === 'admin123') {
+```
+
+**Troque para suas credenciais!**
+
+### Dados de Teste
+
+Os CPF/CNPJ de exemplo são fictícios. Use dados reais apenas em ambiente privado.
+
+---
+
+## 🔗 Links Úteis
+
+- [Criar Repositório](https://github.com/new)
+- [GitHub Pages](https://pages.github.com/)
+- [Documentação Git](https://git-scm.com/doc)
+
+---
+
+## 🆘 Precisa de Ajuda?
+
+Consulte o arquivo **DEPLOY.md** para instruções detalhadas!
+
+---
+
+**Boa sorte! 🎉**

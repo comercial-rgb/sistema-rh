@@ -1,0 +1,1767 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestão de Funcionários</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Funções auxiliares
+        const validarCPF = (cpf) => {
+            cpf = cpf.replace(/[^\d]/g, '');
+            if (cpf.length !== 11) return false;
+            if (/^(\d)\1+$/.test(cpf)) return false;
+            
+            let soma = 0;
+            for (let i = 0; i < 9; i++) soma += parseInt(cpf.charAt(i)) * (10 - i);
+            let resto = (soma * 10) % 11;
+            if (resto === 10 || resto === 11) resto = 0;
+            if (resto !== parseInt(cpf.charAt(9))) return false;
+            
+            soma = 0;
+            for (let i = 0; i < 10; i++) soma += parseInt(cpf.charAt(i)) * (11 - i);
+            resto = (soma * 10) % 11;
+            if (resto === 10 || resto === 11) resto = 0;
+            if (resto !== parseInt(cpf.charAt(10))) return false;
+            
+            return true;
+        };
+
+        const validarCNPJ = (cnpj) => {
+            cnpj = cnpj.replace(/[^\d]/g, '');
+            if (cnpj.length !== 14) return false;
+            if (/^(\d)\1+$/.test(cnpj)) return false;
+            
+            let tamanho = cnpj.length - 2;
+            let numeros = cnpj.substring(0, tamanho);
+            let digitos = cnpj.substring(tamanho);
+            let soma = 0;
+            let pos = tamanho - 7;
+            
+            for (let i = tamanho; i >= 1; i--) {
+                soma += numeros.charAt(tamanho - i) * pos--;
+                if (pos < 2) pos = 9;
+            }
+            
+            let resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
+            if (resultado !== parseInt(digitos.charAt(0))) return false;
+            
+            tamanho = tamanho + 1;
+            numeros = cnpj.substring(0, tamanho);
+            soma = 0;
+            pos = tamanho - 7;
+            
+            for (let i = tamanho; i >= 1; i--) {
+                soma += numeros.charAt(tamanho - i) * pos--;
+                if (pos < 2) pos = 9;
+            }
+            
+            resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
+            if (resultado !== parseInt(digitos.charAt(1))) return false;
+            
+            return true;
+        };
+
+        const formatarCPF = (cpf) => {
+            cpf = cpf.replace(/[^\d]/g, '');
+            return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+        };
+
+        const formatarCNPJ = (cnpj) => {
+            cnpj = cnpj.replace(/[^\d]/g, '');
+            return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+        };
+
+        const formatarMoeda = (valor) => {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
+        };
+
+        const formatarData = (data) => {
+            if (!data) return '';
+            return new Date(data).toLocaleDateString('pt-BR');
+        };
+
+        // Componente Principal
+        function App() {
+            const [usuarioLogado, setUsuarioLogado] = useState(null);
+            const [paginaAtual, setPaginaAtual] = useState('dashboard');
+            const [empresas, setEmpresas] = useState([]);
+            const [funcionarios, setFuncionarios] = useState([]);
+            const [avisos, setAvisos] = useState([]);
+
+            useEffect(() => {
+                const dadosSalvos = localStorage.getItem('sistemaRH');
+                if (dadosSalvos) {
+                    const dados = JSON.parse(dadosSalvos);
+                    setEmpresas(dados.empresas || []);
+                    setFuncionarios(dados.funcionarios || []);
+                    setAvisos(dados.avisos || []);
+                }
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('sistemaRH', JSON.stringify({
+                    empresas,
+                    funcionarios,
+                    avisos
+                }));
+            }, [empresas, funcionarios, avisos]);
+
+            if (!usuarioLogado) {
+                return <Login onLogin={setUsuarioLogado} />;
+            }
+
+            return (
+                <div className="flex h-screen bg-gray-100">
+                    <Sidebar 
+                        usuario={usuarioLogado} 
+                        paginaAtual={paginaAtual}
+                        setPagina={setPaginaAtual}
+                        onLogout={() => setUsuarioLogado(null)}
+                    />
+                    <div className="flex-1 overflow-auto">
+                        <Header usuario={usuarioLogado} />
+                        <main className="p-6">
+                            {paginaAtual === 'dashboard' && (
+                                <Dashboard 
+                                    empresas={empresas}
+                                    funcionarios={funcionarios}
+                                />
+                            )}
+                            {paginaAtual === 'empresas' && (
+                                <GestaoEmpresas 
+                                    empresas={empresas}
+                                    setEmpresas={setEmpresas}
+                                    isAdmin={usuarioLogado.tipo === 'admin'}
+                                />
+                            )}
+                            {paginaAtual === 'funcionarios' && (
+                                <GestaoFuncionarios 
+                                    funcionarios={funcionarios}
+                                    setFuncionarios={setFuncionarios}
+                                    empresas={empresas}
+                                    isAdmin={usuarioLogado.tipo === 'admin'}
+                                    usuarioLogado={usuarioLogado}
+                                />
+                            )}
+                            {paginaAtual === 'rendimentos' && (
+                                <Rendimentos 
+                                    funcionarios={funcionarios}
+                                    usuarioLogado={usuarioLogado}
+                                />
+                            )}
+                            {paginaAtual === 'jornada' && (
+                                <RegistroJornada 
+                                    funcionarios={funcionarios}
+                                    usuarioLogado={usuarioLogado}
+                                />
+                            )}
+                            {paginaAtual === 'avisos' && (
+                                <Avisos 
+                                    avisos={avisos}
+                                    setAvisos={setAvisos}
+                                    isAdmin={usuarioLogado.tipo === 'admin'}
+                                />
+                            )}
+                            {paginaAtual === 'informacoes' && (
+                                <Informacoes />
+                            )}
+                        </main>
+                    </div>
+                </div>
+            );
+        }
+
+        // Componente de Login
+        function Login({ onLogin }) {
+            const [usuario, setUsuario] = useState('');
+            const [senha, setSenha] = useState('');
+            const [erro, setErro] = useState('');
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                
+                // Credenciais de exemplo
+                if (usuario === 'admin' && senha === 'admin123') {
+                    onLogin({ nome: 'Administrador', tipo: 'admin', id: 'admin' });
+                } else if (usuario === 'funcionario' && senha === 'func123') {
+                    onLogin({ nome: 'João Silva', tipo: 'funcionario', id: 'func001', cpf: '123.456.789-00' });
+                } else {
+                    setErro('Usuário ou senha inválidos');
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+                    <div className="bg-white p-8 rounded-lg shadow-2xl w-96">
+                        <div className="text-center mb-8">
+                            <i className="fas fa-users-cog text-6xl text-blue-600 mb-4"></i>
+                            <h1 className="text-3xl font-bold text-gray-800">Sistema RH</h1>
+                            <p className="text-gray-600 mt-2">Gestão de Funcionários</p>
+                        </div>
+                        
+                        <form onSubmit={handleLogin}>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 mb-2">Usuário</label>
+                                <input
+                                    type="text"
+                                    value={usuario}
+                                    onChange={(e) => setUsuario(e.target.value)}
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Digite seu usuário"
+                                />
+                            </div>
+                            
+                            <div className="mb-6">
+                                <label className="block text-gray-700 mb-2">Senha</label>
+                                <input
+                                    type="password"
+                                    value={senha}
+                                    onChange={(e) => setSenha(e.target.value)}
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Digite sua senha"
+                                />
+                            </div>
+                            
+                            {erro && (
+                                <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">
+                                    {erro}
+                                </div>
+                            )}
+                            
+                            <button
+                                type="submit"
+                                className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
+                            >
+                                Entrar
+                            </button>
+                        </form>
+                        
+                        <div className="mt-6 text-sm text-gray-600 text-center">
+                            <p>Credenciais de teste:</p>
+                            <p>Admin: admin / admin123</p>
+                            <p>Funcionário: funcionario / func123</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Sidebar
+        function Sidebar({ usuario, paginaAtual, setPagina, onLogout }) {
+            const menuItems = usuario.tipo === 'admin' ? [
+                { id: 'dashboard', icon: 'chart-line', label: 'Dashboard' },
+                { id: 'empresas', icon: 'building', label: 'Empresas' },
+                { id: 'funcionarios', icon: 'users', label: 'Funcionários' },
+                { id: 'rendimentos', icon: 'money-bill-wave', label: 'Rendimentos' },
+                { id: 'jornada', icon: 'clock', label: 'Jornada' },
+                { id: 'avisos', icon: 'bullhorn', label: 'Avisos' },
+                { id: 'informacoes', icon: 'info-circle', label: 'Informações' },
+            ] : [
+                { id: 'dashboard', icon: 'chart-line', label: 'Dashboard' },
+                { id: 'rendimentos', icon: 'money-bill-wave', label: 'Meus Rendimentos' },
+                { id: 'jornada', icon: 'clock', label: 'Minha Jornada' },
+                { id: 'avisos', icon: 'bullhorn', label: 'Avisos' },
+                { id: 'informacoes', icon: 'info-circle', label: 'Informações' },
+            ];
+
+            return (
+                <div className="w-64 bg-gray-900 text-white flex flex-col">
+                    <div className="p-6 border-b border-gray-800">
+                        <h1 className="text-xl font-bold">Sistema RH</h1>
+                        <p className="text-sm text-gray-400 mt-1">{usuario.nome}</p>
+                        <span className={`inline-block px-2 py-1 text-xs rounded mt-2 ${
+                            usuario.tipo === 'admin' ? 'bg-red-600' : 'bg-blue-600'
+                        }`}>
+                            {usuario.tipo === 'admin' ? 'Administrador' : 'Funcionário'}
+                        </span>
+                    </div>
+                    
+                    <nav className="flex-1 p-4">
+                        {menuItems.map(item => (
+                            <button
+                                key={item.id}
+                                onClick={() => setPagina(item.id)}
+                                className={`w-full text-left px-4 py-3 rounded-lg mb-2 flex items-center transition ${
+                                    paginaAtual === item.id
+                                        ? 'bg-blue-600 text-white'
+                                        : 'text-gray-300 hover:bg-gray-800'
+                                }`}
+                            >
+                                <i className={`fas fa-${item.icon} mr-3`}></i>
+                                {item.label}
+                            </button>
+                        ))}
+                    </nav>
+                    
+                    <div className="p-4 border-t border-gray-800">
+                        <button
+                            onClick={onLogout}
+                            className="w-full px-4 py-3 bg-red-600 rounded-lg hover:bg-red-700 transition flex items-center justify-center"
+                        >
+                            <i className="fas fa-sign-out-alt mr-2"></i>
+                            Sair
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Header
+        function Header({ usuario }) {
+            const [dataHora, setDataHora] = useState(new Date());
+
+            useEffect(() => {
+                const timer = setInterval(() => setDataHora(new Date()), 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            return (
+                <header className="bg-white shadow-sm p-4 flex justify-between items-center">
+                    <h2 className="text-2xl font-bold text-gray-800">
+                        Bem-vindo, {usuario.nome}!
+                    </h2>
+                    <div className="text-right">
+                        <div className="text-gray-600">
+                            {dataHora.toLocaleDateString('pt-BR', { 
+                                weekday: 'long', 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric' 
+                            })}
+                        </div>
+                        <div className="text-gray-500 text-sm">
+                            {dataHora.toLocaleTimeString('pt-BR')}
+                        </div>
+                    </div>
+                </header>
+            );
+        }
+
+        // Dashboard
+        function Dashboard({ empresas, funcionarios }) {
+            const funcionariosAtivos = funcionarios.filter(f => f.status === 'Ativo').length;
+            const funcionariosInativos = funcionarios.filter(f => f.status === 'Inativo').length;
+            const funcionariosCLT = funcionarios.filter(f => f.tipoVinculo === 'CLT').length;
+            const funcionariosTerceiros = funcionarios.filter(f => f.tipoVinculo === 'Terceiro').length;
+
+            const cards = [
+                { 
+                    titulo: 'Total de Empresas', 
+                    valor: empresas.length, 
+                    icon: 'building',
+                    cor: 'blue'
+                },
+                { 
+                    titulo: 'Total de Funcionários', 
+                    valor: funcionarios.length, 
+                    icon: 'users',
+                    cor: 'green'
+                },
+                { 
+                    titulo: 'Funcionários Ativos', 
+                    valor: funcionariosAtivos, 
+                    icon: 'user-check',
+                    cor: 'purple'
+                },
+                { 
+                    titulo: 'Funcionários CLT', 
+                    valor: funcionariosCLT, 
+                    icon: 'id-card',
+                    cor: 'orange'
+                },
+            ];
+
+            return (
+                <div>
+                    <h2 className="text-3xl font-bold mb-6">Dashboard</h2>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        {cards.map((card, index) => (
+                            <div key={index} className={`bg-white p-6 rounded-lg shadow-lg border-l-4 border-${card.cor}-500`}>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-gray-600 mb-2">{card.titulo}</p>
+                                        <p className="text-4xl font-bold text-gray-800">{card.valor}</p>
+                                    </div>
+                                    <i className={`fas fa-${card.icon} text-5xl text-${card.cor}-500 opacity-20`}></i>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-lg shadow-lg">
+                            <h3 className="text-xl font-bold mb-4">Status dos Funcionários</h3>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center p-3 bg-green-50 rounded">
+                                    <span className="font-medium">Ativos</span>
+                                    <span className="text-2xl font-bold text-green-600">{funcionariosAtivos}</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-red-50 rounded">
+                                    <span className="font-medium">Inativos</span>
+                                    <span className="text-2xl font-bold text-red-600">{funcionariosInativos}</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-yellow-50 rounded">
+                                    <span className="font-medium">Férias</span>
+                                    <span className="text-2xl font-bold text-yellow-600">
+                                        {funcionarios.filter(f => f.status === 'Férias').length}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow-lg">
+                            <h3 className="text-xl font-bold mb-4">Tipo de Vínculo</h3>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
+                                    <span className="font-medium">CLT</span>
+                                    <span className="text-2xl font-bold text-blue-600">{funcionariosCLT}</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-purple-50 rounded">
+                                    <span className="font-medium">Terceiros</span>
+                                    <span className="text-2xl font-bold text-purple-600">{funcionariosTerceiros}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {funcionarios.length > 0 && (
+                        <div className="bg-white p-6 rounded-lg shadow-lg mt-6">
+                            <h3 className="text-xl font-bold mb-4">Últimos Cadastros</h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b">
+                                            <th className="text-left p-3">Nome</th>
+                                            <th className="text-left p-3">Cargo</th>
+                                            <th className="text-left p-3">Admissão</th>
+                                            <th className="text-left p-3">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {funcionarios.slice(-5).reverse().map((func, index) => (
+                                            <tr key={index} className="border-b hover:bg-gray-50">
+                                                <td className="p-3">{func.nome}</td>
+                                                <td className="p-3">{func.cargo}</td>
+                                                <td className="p-3">{formatarData(func.dataAdmissao)}</td>
+                                                <td className="p-3">
+                                                    <span className={`px-2 py-1 rounded text-xs ${
+                                                        func.status === 'Ativo' ? 'bg-green-100 text-green-800' :
+                                                        func.status === 'Inativo' ? 'bg-red-100 text-red-800' :
+                                                        'bg-yellow-100 text-yellow-800'
+                                                    }`}>
+                                                        {func.status}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Gestão de Empresas
+        function GestaoEmpresas({ empresas, setEmpresas, isAdmin }) {
+            const [mostrarForm, setMostrarForm] = useState(false);
+            const [empresaEditando, setEmpresaEditando] = useState(null);
+            const [busca, setBusca] = useState('');
+
+            const empresasFiltradas = empresas.filter(emp =>
+                emp.razaoSocial.toLowerCase().includes(busca.toLowerCase()) ||
+                emp.cnpj.includes(busca)
+            );
+
+            if (!isAdmin) {
+                return (
+                    <div className="bg-white p-6 rounded-lg shadow-lg">
+                        <h2 className="text-2xl font-bold mb-4">Empresas Cadastradas</h2>
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b">
+                                        <th className="text-left p-3">Razão Social</th>
+                                        <th className="text-left p-3">CNPJ</th>
+                                        <th className="text-left p-3">Cidade</th>
+                                        <th className="text-left p-3">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {empresas.map((emp, index) => (
+                                        <tr key={index} className="border-b hover:bg-gray-50">
+                                            <td className="p-3">{emp.razaoSocial}</td>
+                                            <td className="p-3">{emp.cnpj}</td>
+                                            <td className="p-3">{emp.cidade}</td>
+                                            <td className="p-3">{emp.estado}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-3xl font-bold">Gestão de Empresas</h2>
+                        <button
+                            onClick={() => {
+                                setMostrarForm(true);
+                                setEmpresaEditando(null);
+                            }}
+                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                        >
+                            <i className="fas fa-plus mr-2"></i>
+                            Nova Empresa
+                        </button>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-lg shadow mb-4">
+                        <input
+                            type="text"
+                            placeholder="Buscar por razão social ou CNPJ..."
+                            value={busca}
+                            onChange={(e) => setBusca(e.target.value)}
+                            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                    </div>
+
+                    {mostrarForm && (
+                        <FormEmpresa
+                            empresa={empresaEditando}
+                            onSalvar={(empresa) => {
+                                if (empresaEditando) {
+                                    setEmpresas(empresas.map(e => 
+                                        e.id === empresa.id ? empresa : e
+                                    ));
+                                } else {
+                                    setEmpresas([...empresas, { ...empresa, id: Date.now() }]);
+                                }
+                                setMostrarForm(false);
+                                setEmpresaEditando(null);
+                            }}
+                            onCancelar={() => {
+                                setMostrarForm(false);
+                                setEmpresaEditando(null);
+                            }}
+                        />
+                    )}
+
+                    <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="text-left p-4">Razão Social</th>
+                                        <th className="text-left p-4">CNPJ</th>
+                                        <th className="text-left p-4">Endereço</th>
+                                        <th className="text-left p-4">Cidade/UF</th>
+                                        <th className="text-center p-4">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {empresasFiltradas.map((empresa, index) => (
+                                        <tr key={index} className="border-b hover:bg-gray-50">
+                                            <td className="p-4 font-medium">{empresa.razaoSocial}</td>
+                                            <td className="p-4">{empresa.cnpj}</td>
+                                            <td className="p-4">{empresa.endereco}, {empresa.bairro}</td>
+                                            <td className="p-4">{empresa.cidade}/{empresa.estado}</td>
+                                            <td className="p-4">
+                                                <div className="flex justify-center gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setEmpresaEditando(empresa);
+                                                            setMostrarForm(true);
+                                                        }}
+                                                        className="text-blue-600 hover:text-blue-800"
+                                                    >
+                                                        <i className="fas fa-edit"></i>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            if (confirm('Deseja excluir esta empresa?')) {
+                                                                setEmpresas(empresas.filter(e => e.id !== empresa.id));
+                                                            }
+                                                        }}
+                                                        className="text-red-600 hover:text-red-800"
+                                                    >
+                                                        <i className="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Form Empresa
+        function FormEmpresa({ empresa, onSalvar, onCancelar }) {
+            const [formData, setFormData] = useState(empresa || {
+                razaoSocial: '',
+                cnpj: '',
+                endereco: '',
+                bairro: '',
+                cidade: '',
+                estado: ''
+            });
+            const [erros, setErros] = useState({});
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const novosErros = {};
+
+                if (!formData.razaoSocial) novosErros.razaoSocial = 'Campo obrigatório';
+                if (!formData.cnpj) {
+                    novosErros.cnpj = 'Campo obrigatório';
+                } else if (!validarCNPJ(formData.cnpj)) {
+                    novosErros.cnpj = 'CNPJ inválido';
+                }
+
+                if (Object.keys(novosErros).length > 0) {
+                    setErros(novosErros);
+                    return;
+                }
+
+                onSalvar({ ...formData, cnpj: formatarCNPJ(formData.cnpj) });
+            };
+
+            return (
+                <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+                    <h3 className="text-xl font-bold mb-4">
+                        {empresa ? 'Editar Empresa' : 'Nova Empresa'}
+                    </h3>
+                    <form onSubmit={handleSubmit}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block mb-2 font-medium">Razão Social *</label>
+                                <input
+                                    type="text"
+                                    value={formData.razaoSocial}
+                                    onChange={(e) => setFormData({...formData, razaoSocial: e.target.value})}
+                                    className={`w-full px-4 py-2 border rounded-lg ${erros.razaoSocial ? 'border-red-500' : ''}`}
+                                />
+                                {erros.razaoSocial && <p className="text-red-500 text-sm mt-1">{erros.razaoSocial}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">CNPJ *</label>
+                                <input
+                                    type="text"
+                                    value={formData.cnpj}
+                                    onChange={(e) => setFormData({...formData, cnpj: e.target.value})}
+                                    className={`w-full px-4 py-2 border rounded-lg ${erros.cnpj ? 'border-red-500' : ''}`}
+                                    placeholder="00.000.000/0000-00"
+                                />
+                                {erros.cnpj && <p className="text-red-500 text-sm mt-1">{erros.cnpj}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Endereço</label>
+                                <input
+                                    type="text"
+                                    value={formData.endereco}
+                                    onChange={(e) => setFormData({...formData, endereco: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Bairro</label>
+                                <input
+                                    type="text"
+                                    value={formData.bairro}
+                                    onChange={(e) => setFormData({...formData, bairro: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Cidade</label>
+                                <input
+                                    type="text"
+                                    value={formData.cidade}
+                                    onChange={(e) => setFormData({...formData, cidade: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Estado</label>
+                                <select
+                                    value={formData.estado}
+                                    onChange={(e) => setFormData({...formData, estado: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                >
+                                    <option value="">Selecione</option>
+                                    <option value="MS">MS - Mato Grosso do Sul</option>
+                                    <option value="AC">AC - Acre</option>
+                                    <option value="AL">AL - Alagoas</option>
+                                    <option value="AP">AP - Amapá</option>
+                                    <option value="AM">AM - Amazonas</option>
+                                    <option value="BA">BA - Bahia</option>
+                                    <option value="CE">CE - Ceará</option>
+                                    <option value="DF">DF - Distrito Federal</option>
+                                    <option value="ES">ES - Espírito Santo</option>
+                                    <option value="GO">GO - Goiás</option>
+                                    <option value="MA">MA - Maranhão</option>
+                                    <option value="MT">MT - Mato Grosso</option>
+                                    <option value="MG">MG - Minas Gerais</option>
+                                    <option value="PA">PA - Pará</option>
+                                    <option value="PB">PB - Paraíba</option>
+                                    <option value="PR">PR - Paraná</option>
+                                    <option value="PE">PE - Pernambuco</option>
+                                    <option value="PI">PI - Piauí</option>
+                                    <option value="RJ">RJ - Rio de Janeiro</option>
+                                    <option value="RN">RN - Rio Grande do Norte</option>
+                                    <option value="RS">RS - Rio Grande do Sul</option>
+                                    <option value="RO">RO - Rondônia</option>
+                                    <option value="RR">RR - Roraima</option>
+                                    <option value="SC">SC - Santa Catarina</option>
+                                    <option value="SP">SP - São Paulo</option>
+                                    <option value="SE">SE - Sergipe</option>
+                                    <option value="TO">TO - Tocantins</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4 mt-6">
+                            <button
+                                type="submit"
+                                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                            >
+                                <i className="fas fa-save mr-2"></i>
+                                Salvar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={onCancelar}
+                                className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            );
+        }
+
+        // Gestão de Funcionários
+        function GestaoFuncionarios({ funcionarios, setFuncionarios, empresas, isAdmin, usuarioLogado }) {
+            const [mostrarForm, setMostrarForm] = useState(false);
+            const [funcionarioEditando, setFuncionarioEditando] = useState(null);
+            const [busca, setBusca] = useState('');
+            const [filtroStatus, setFiltroStatus] = useState('Todos');
+
+            let funcionariosFiltrados = funcionarios.filter(func => {
+                const matchBusca = func.nome.toLowerCase().includes(busca.toLowerCase()) ||
+                    func.cpf.includes(busca) ||
+                    func.cargo.toLowerCase().includes(busca.toLowerCase());
+                
+                const matchStatus = filtroStatus === 'Todos' || func.status === filtroStatus;
+                
+                return matchBusca && matchStatus;
+            });
+
+            // Se não for admin, mostrar apenas próprios dados
+            if (!isAdmin && usuarioLogado.tipo === 'funcionario') {
+                funcionariosFiltrados = funcionarios.filter(f => f.cpf === usuarioLogado.cpf);
+            }
+
+            return (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-3xl font-bold">Gestão de Funcionários</h2>
+                        {isAdmin && (
+                            <button
+                                onClick={() => {
+                                    setMostrarForm(true);
+                                    setFuncionarioEditando(null);
+                                }}
+                                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition"
+                            >
+                                <i className="fas fa-user-plus mr-2"></i>
+                                Novo Funcionário
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="bg-white p-4 rounded-lg shadow mb-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input
+                                type="text"
+                                placeholder="Buscar por nome, CPF ou cargo..."
+                                value={busca}
+                                onChange={(e) => setBusca(e.target.value)}
+                                className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <select
+                                value={filtroStatus}
+                                onChange={(e) => setFiltroStatus(e.target.value)}
+                                className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                                <option value="Todos">Todos os Status</option>
+                                <option value="Ativo">Ativo</option>
+                                <option value="Inativo">Inativo</option>
+                                <option value="Férias">Férias</option>
+                                <option value="Afastado">Afastado</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {mostrarForm && (
+                        <FormFuncionario
+                            funcionario={funcionarioEditando}
+                            empresas={empresas}
+                            onSalvar={(funcionario) => {
+                                if (funcionarioEditando) {
+                                    setFuncionarios(funcionarios.map(f => 
+                                        f.id === funcionario.id ? funcionario : f
+                                    ));
+                                } else {
+                                    setFuncionarios([...funcionarios, { ...funcionario, id: Date.now() }]);
+                                }
+                                setMostrarForm(false);
+                                setFuncionarioEditando(null);
+                            }}
+                            onCancelar={() => {
+                                setMostrarForm(false);
+                                setFuncionarioEditando(null);
+                            }}
+                        />
+                    )}
+
+                    <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="text-left p-4">Nome</th>
+                                        <th className="text-left p-4">CPF</th>
+                                        <th className="text-left p-4">Cargo</th>
+                                        <th className="text-left p-4">Vínculo</th>
+                                        <th className="text-left p-4">Admissão</th>
+                                        <th className="text-left p-4">Status</th>
+                                        {isAdmin && <th className="text-center p-4">Ações</th>}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {funcionariosFiltrados.map((func, index) => (
+                                        <tr key={index} className="border-b hover:bg-gray-50">
+                                            <td className="p-4 font-medium">{func.nome}</td>
+                                            <td className="p-4">{func.cpf}</td>
+                                            <td className="p-4">{func.cargo}</td>
+                                            <td className="p-4">
+                                                <span className={`px-2 py-1 rounded text-xs ${
+                                                    func.tipoVinculo === 'CLT' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                                                }`}>
+                                                    {func.tipoVinculo}
+                                                </span>
+                                            </td>
+                                            <td className="p-4">{formatarData(func.dataAdmissao)}</td>
+                                            <td className="p-4">
+                                                <span className={`px-2 py-1 rounded text-xs ${
+                                                    func.status === 'Ativo' ? 'bg-green-100 text-green-800' :
+                                                    func.status === 'Inativo' ? 'bg-red-100 text-red-800' :
+                                                    func.status === 'Férias' ? 'bg-yellow-100 text-yellow-800' :
+                                                    'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                    {func.status}
+                                                </span>
+                                            </td>
+                                            {isAdmin && (
+                                                <td className="p-4">
+                                                    <div className="flex justify-center gap-2">
+                                                        <button
+                                                            onClick={() => {
+                                                                setFuncionarioEditando(func);
+                                                                setMostrarForm(true);
+                                                            }}
+                                                            className="text-blue-600 hover:text-blue-800"
+                                                        >
+                                                            <i className="fas fa-edit"></i>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                if (confirm('Deseja excluir este funcionário?')) {
+                                                                    setFuncionarios(funcionarios.filter(f => f.id !== func.id));
+                                                                }
+                                                            }}
+                                                            className="text-red-600 hover:text-red-800"
+                                                        >
+                                                            <i className="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Form Funcionário
+        function FormFuncionario({ funcionario, empresas, onSalvar, onCancelar }) {
+            const [formData, setFormData] = useState(funcionario || {
+                nome: '',
+                cbo: '',
+                cpf: '',
+                rg: '',
+                endereco: '',
+                bairro: '',
+                cidade: '',
+                estado: '',
+                pais: 'Brasil',
+                ctps: '',
+                pis: '',
+                dataAdmissao: '',
+                cargo: '',
+                salarioBase: '',
+                empresaId: '',
+                tipoVinculo: 'CLT',
+                status: 'Ativo',
+                departamento: '',
+                email: '',
+                telefone: ''
+            });
+            const [erros, setErros] = useState({});
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const novosErros = {};
+
+                if (!formData.nome) novosErros.nome = 'Campo obrigatório';
+                if (!formData.cpf) {
+                    novosErros.cpf = 'Campo obrigatório';
+                } else if (!validarCPF(formData.cpf)) {
+                    novosErros.cpf = 'CPF inválido';
+                }
+                if (!formData.cargo) novosErros.cargo = 'Campo obrigatório';
+                if (!formData.dataAdmissao) novosErros.dataAdmissao = 'Campo obrigatório';
+
+                if (Object.keys(novosErros).length > 0) {
+                    setErros(novosErros);
+                    return;
+                }
+
+                onSalvar({ ...formData, cpf: formatarCPF(formData.cpf) });
+            };
+
+            return (
+                <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+                    <h3 className="text-xl font-bold mb-4">
+                        {funcionario ? 'Editar Funcionário' : 'Novo Funcionário'}
+                    </h3>
+                    <form onSubmit={handleSubmit}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="lg:col-span-3">
+                                <label className="block mb-2 font-medium">Nome Completo *</label>
+                                <input
+                                    type="text"
+                                    value={formData.nome}
+                                    onChange={(e) => setFormData({...formData, nome: e.target.value})}
+                                    className={`w-full px-4 py-2 border rounded-lg ${erros.nome ? 'border-red-500' : ''}`}
+                                />
+                                {erros.nome && <p className="text-red-500 text-sm mt-1">{erros.nome}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">CPF *</label>
+                                <input
+                                    type="text"
+                                    value={formData.cpf}
+                                    onChange={(e) => setFormData({...formData, cpf: e.target.value})}
+                                    className={`w-full px-4 py-2 border rounded-lg ${erros.cpf ? 'border-red-500' : ''}`}
+                                    placeholder="000.000.000-00"
+                                />
+                                {erros.cpf && <p className="text-red-500 text-sm mt-1">{erros.cpf}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">RG</label>
+                                <input
+                                    type="text"
+                                    value={formData.rg}
+                                    onChange={(e) => setFormData({...formData, rg: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">CBO</label>
+                                <input
+                                    type="text"
+                                    value={formData.cbo}
+                                    onChange={(e) => setFormData({...formData, cbo: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Cargo *</label>
+                                <input
+                                    type="text"
+                                    value={formData.cargo}
+                                    onChange={(e) => setFormData({...formData, cargo: e.target.value})}
+                                    className={`w-full px-4 py-2 border rounded-lg ${erros.cargo ? 'border-red-500' : ''}`}
+                                />
+                                {erros.cargo && <p className="text-red-500 text-sm mt-1">{erros.cargo}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Departamento</label>
+                                <input
+                                    type="text"
+                                    value={formData.departamento}
+                                    onChange={(e) => setFormData({...formData, departamento: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Tipo de Vínculo *</label>
+                                <select
+                                    value={formData.tipoVinculo}
+                                    onChange={(e) => setFormData({...formData, tipoVinculo: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                >
+                                    <option value="CLT">CLT</option>
+                                    <option value="Terceiro">Terceiro</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Status *</label>
+                                <select
+                                    value={formData.status}
+                                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                >
+                                    <option value="Ativo">Ativo</option>
+                                    <option value="Inativo">Inativo</option>
+                                    <option value="Férias">Férias</option>
+                                    <option value="Afastado">Afastado</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Data de Admissão *</label>
+                                <input
+                                    type="date"
+                                    value={formData.dataAdmissao}
+                                    onChange={(e) => setFormData({...formData, dataAdmissao: e.target.value})}
+                                    className={`w-full px-4 py-2 border rounded-lg ${erros.dataAdmissao ? 'border-red-500' : ''}`}
+                                />
+                                {erros.dataAdmissao && <p className="text-red-500 text-sm mt-1">{erros.dataAdmissao}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Salário Base</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={formData.salarioBase}
+                                    onChange={(e) => setFormData({...formData, salarioBase: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                    placeholder="0.00"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">CTPS</label>
+                                <input
+                                    type="text"
+                                    value={formData.ctps}
+                                    onChange={(e) => setFormData({...formData, ctps: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">PIS</label>
+                                <input
+                                    type="text"
+                                    value={formData.pis}
+                                    onChange={(e) => setFormData({...formData, pis: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Email</label>
+                                <input
+                                    type="email"
+                                    value={formData.email}
+                                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Telefone</label>
+                                <input
+                                    type="tel"
+                                    value={formData.telefone}
+                                    onChange={(e) => setFormData({...formData, telefone: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div className="lg:col-span-2">
+                                <label className="block mb-2 font-medium">Endereço</label>
+                                <input
+                                    type="text"
+                                    value={formData.endereco}
+                                    onChange={(e) => setFormData({...formData, endereco: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Bairro</label>
+                                <input
+                                    type="text"
+                                    value={formData.bairro}
+                                    onChange={(e) => setFormData({...formData, bairro: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Cidade</label>
+                                <input
+                                    type="text"
+                                    value={formData.cidade}
+                                    onChange={(e) => setFormData({...formData, cidade: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Estado</label>
+                                <select
+                                    value={formData.estado}
+                                    onChange={(e) => setFormData({...formData, estado: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                >
+                                    <option value="">Selecione</option>
+                                    <option value="MS">MS</option>
+                                    <option value="AC">AC</option>
+                                    <option value="AL">AL</option>
+                                    <option value="SP">SP</option>
+                                    <option value="RJ">RJ</option>
+                                    {/* Adicione outros estados */}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">País</label>
+                                <input
+                                    type="text"
+                                    value={formData.pais}
+                                    onChange={(e) => setFormData({...formData, pais: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div className="lg:col-span-3">
+                                <label className="block mb-2 font-medium">Empresa</label>
+                                <select
+                                    value={formData.empresaId}
+                                    onChange={(e) => setFormData({...formData, empresaId: e.target.value})}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                >
+                                    <option value="">Selecione uma empresa</option>
+                                    {empresas.map(emp => (
+                                        <option key={emp.id} value={emp.id}>
+                                            {emp.razaoSocial} - {emp.cnpj}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-4 mt-6">
+                            <button
+                                type="submit"
+                                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition"
+                            >
+                                <i className="fas fa-save mr-2"></i>
+                                Salvar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={onCancelar}
+                                className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            );
+        }
+
+        // Rendimentos
+        function Rendimentos({ funcionarios, usuarioLogado }) {
+            const [funcionarioSelecionado, setFuncionarioSelecionado] = useState('');
+            const [mes, setMes] = useState(new Date().getMonth() + 1);
+            const [ano, setAno] = useState(new Date().getFullYear());
+
+            const funcionariosFiltrados = usuarioLogado.tipo === 'admin' 
+                ? funcionarios 
+                : funcionarios.filter(f => f.cpf === usuarioLogado.cpf);
+
+            const funcionario = funcionarios.find(f => f.id === parseInt(funcionarioSelecionado));
+
+            const calcularRendimentos = () => {
+                if (!funcionario) return null;
+
+                const salarioBase = parseFloat(funcionario.salarioBase) || 0;
+                const inss = salarioBase * 0.11;
+                const irrf = salarioBase * 0.075;
+                const valeTransporte = salarioBase * 0.06;
+                const valeAlimentacao = 500;
+                const totalDescontos = inss + irrf + valeTransporte;
+                const salarioLiquido = salarioBase + valeAlimentacao - totalDescontos;
+
+                return {
+                    salarioBase,
+                    valeAlimentacao,
+                    inss,
+                    irrf,
+                    valeTransporte,
+                    totalDescontos,
+                    salarioLiquido
+                };
+            };
+
+            const rendimentos = calcularRendimentos();
+
+            return (
+                <div>
+                    <h2 className="text-3xl font-bold mb-6">Rendimentos</h2>
+
+                    <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block mb-2 font-medium">Funcionário</label>
+                                <select
+                                    value={funcionarioSelecionado}
+                                    onChange={(e) => setFuncionarioSelecionado(e.target.value)}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                >
+                                    <option value="">Selecione um funcionário</option>
+                                    {funcionariosFiltrados.map(func => (
+                                        <option key={func.id} value={func.id}>
+                                            {func.nome} - {func.cpf}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Mês</label>
+                                <select
+                                    value={mes}
+                                    onChange={(e) => setMes(e.target.value)}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                >
+                                    <option value="1">Janeiro</option>
+                                    <option value="2">Fevereiro</option>
+                                    <option value="3">Março</option>
+                                    <option value="4">Abril</option>
+                                    <option value="5">Maio</option>
+                                    <option value="6">Junho</option>
+                                    <option value="7">Julho</option>
+                                    <option value="8">Agosto</option>
+                                    <option value="9">Setembro</option>
+                                    <option value="10">Outubro</option>
+                                    <option value="11">Novembro</option>
+                                    <option value="12">Dezembro</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block mb-2 font-medium">Ano</label>
+                                <input
+                                    type="number"
+                                    value={ano}
+                                    onChange={(e) => setAno(e.target.value)}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {rendimentos && (
+                        <div className="bg-white p-6 rounded-lg shadow-lg">
+                            <h3 className="text-2xl font-bold mb-6 text-center">
+                                Holerite - {['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
+                                'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'][mes-1]}/{ano}
+                            </h3>
+
+                            <div className="mb-6 p-4 bg-gray-50 rounded">
+                                <h4 className="font-bold mb-2">Dados do Funcionário</h4>
+                                <p><strong>Nome:</strong> {funcionario.nome}</p>
+                                <p><strong>CPF:</strong> {funcionario.cpf}</p>
+                                <p><strong>Cargo:</strong> {funcionario.cargo}</p>
+                                <p><strong>Admissão:</strong> {formatarData(funcionario.dataAdmissao)}</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div>
+                                    <h4 className="font-bold mb-4 text-green-700">Proventos</h4>
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between p-2 bg-green-50 rounded">
+                                            <span>Salário Base</span>
+                                            <span className="font-bold">{formatarMoeda(rendimentos.salarioBase)}</span>
+                                        </div>
+                                        <div className="flex justify-between p-2 bg-green-50 rounded">
+                                            <span>Vale Alimentação</span>
+                                            <span className="font-bold">{formatarMoeda(rendimentos.valeAlimentacao)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-bold mb-4 text-red-700">Descontos</h4>
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between p-2 bg-red-50 rounded">
+                                            <span>INSS (11%)</span>
+                                            <span className="font-bold">{formatarMoeda(rendimentos.inss)}</span>
+                                        </div>
+                                        <div className="flex justify-between p-2 bg-red-50 rounded">
+                                            <span>IRRF (7,5%)</span>
+                                            <span className="font-bold">{formatarMoeda(rendimentos.irrf)}</span>
+                                        </div>
+                                        <div className="flex justify-between p-2 bg-red-50 rounded">
+                                            <span>Vale Transporte (6%)</span>
+                                            <span className="font-bold">{formatarMoeda(rendimentos.valeTransporte)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t-2 pt-4">
+                                <div className="flex justify-between items-center p-4 bg-blue-50 rounded">
+                                    <span className="text-xl font-bold">SALÁRIO LÍQUIDO</span>
+                                    <span className="text-3xl font-bold text-blue-700">
+                                        {formatarMoeda(rendimentos.salarioLiquido)}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 flex justify-end gap-4">
+                                <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
+                                    <i className="fas fa-download mr-2"></i>
+                                    Baixar PDF
+                                </button>
+                                <button className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition">
+                                    <i className="fas fa-print mr-2"></i>
+                                    Imprimir
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Registro de Jornada
+        function RegistroJornada({ funcionarios, usuarioLogado }) {
+            const [registros, setRegistros] = useState([]);
+            const [dataRegistro, setDataRegistro] = useState(new Date().toISOString().split('T')[0]);
+
+            const registrarPonto = (tipo) => {
+                const agora = new Date();
+                const novoRegistro = {
+                    id: Date.now(),
+                    funcionario: usuarioLogado.nome,
+                    cpf: usuarioLogado.cpf,
+                    tipo,
+                    data: dataRegistro,
+                    hora: agora.toLocaleTimeString('pt-BR'),
+                    timestamp: agora.getTime()
+                };
+                setRegistros([...registros, novoRegistro]);
+            };
+
+            const registrosHoje = registros.filter(r => r.data === dataRegistro);
+
+            return (
+                <div>
+                    <h2 className="text-3xl font-bold mb-6">Registro de Jornada</h2>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div className="bg-white p-6 rounded-lg shadow-lg">
+                            <h3 className="text-xl font-bold mb-4">Registrar Ponto</h3>
+                            
+                            <div className="mb-4">
+                                <label className="block mb-2 font-medium">Data</label>
+                                <input
+                                    type="date"
+                                    value={dataRegistro}
+                                    onChange={(e) => setDataRegistro(e.target.value)}
+                                    className="w-full px-4 py-2 border rounded-lg"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <button
+                                    onClick={() => registrarPonto('Entrada')}
+                                    className="bg-green-600 text-white px-6 py-4 rounded-lg hover:bg-green-700 transition"
+                                >
+                                    <i className="fas fa-sign-in-alt text-2xl mb-2 block"></i>
+                                    Entrada
+                                </button>
+                                <button
+                                    onClick={() => registrarPonto('Saída Intervalo')}
+                                    className="bg-yellow-600 text-white px-6 py-4 rounded-lg hover:bg-yellow-700 transition"
+                                >
+                                    <i className="fas fa-utensils text-2xl mb-2 block"></i>
+                                    Saída Intervalo
+                                </button>
+                                <button
+                                    onClick={() => registrarPonto('Retorno Intervalo')}
+                                    className="bg-blue-600 text-white px-6 py-4 rounded-lg hover:bg-blue-700 transition"
+                                >
+                                    <i className="fas fa-undo text-2xl mb-2 block"></i>
+                                    Retorno
+                                </button>
+                                <button
+                                    onClick={() => registrarPonto('Saída')}
+                                    className="bg-red-600 text-white px-6 py-4 rounded-lg hover:bg-red-700 transition"
+                                >
+                                    <i className="fas fa-sign-out-alt text-2xl mb-2 block"></i>
+                                    Saída
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow-lg">
+                            <h3 className="text-xl font-bold mb-4">Registros de Hoje</h3>
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                                {registrosHoje.length === 0 ? (
+                                    <p className="text-gray-500 text-center py-8">Nenhum registro hoje</p>
+                                ) : (
+                                    registrosHoje.map(reg => (
+                                        <div key={reg.id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                                            <div>
+                                                <span className={`px-2 py-1 rounded text-xs ${
+                                                    reg.tipo === 'Entrada' ? 'bg-green-100 text-green-800' :
+                                                    reg.tipo === 'Saída' ? 'bg-red-100 text-red-800' :
+                                                    'bg-yellow-100 text-yellow-800'
+                                                }`}>
+                                                    {reg.tipo}
+                                                </span>
+                                            </div>
+                                            <span className="font-bold text-lg">{reg.hora}</span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-lg shadow-lg">
+                        <h3 className="text-xl font-bold mb-4">Histórico de Registros</h3>
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="text-left p-3">Data</th>
+                                        <th className="text-left p-3">Hora</th>
+                                        <th className="text-left p-3">Tipo</th>
+                                        <th className="text-left p-3">Funcionário</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {registros.reverse().map(reg => (
+                                        <tr key={reg.id} className="border-b hover:bg-gray-50">
+                                            <td className="p-3">{formatarData(reg.data)}</td>
+                                            <td className="p-3 font-bold">{reg.hora}</td>
+                                            <td className="p-3">
+                                                <span className={`px-2 py-1 rounded text-xs ${
+                                                    reg.tipo === 'Entrada' ? 'bg-green-100 text-green-800' :
+                                                    reg.tipo === 'Saída' ? 'bg-red-100 text-red-800' :
+                                                    'bg-yellow-100 text-yellow-800'
+                                                }`}>
+                                                    {reg.tipo}
+                                                </span>
+                                            </td>
+                                            <td className="p-3">{reg.funcionario}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Avisos
+        function Avisos({ avisos, setAvisos, isAdmin }) {
+            const [mostrarForm, setMostrarForm] = useState(false);
+            const [novoAviso, setNovoAviso] = useState({ titulo: '', conteudo: '', tipo: 'info' });
+
+            const adicionarAviso = () => {
+                const aviso = {
+                    ...novoAviso,
+                    id: Date.now(),
+                    data: new Date().toISOString(),
+                    autor: 'Administrador'
+                };
+                setAvisos([aviso, ...avisos]);
+                setNovoAviso({ titulo: '', conteudo: '', tipo: 'info' });
+                setMostrarForm(false);
+            };
+
+            return (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-3xl font-bold">Avisos e Comunicados</h2>
+                        {isAdmin && (
+                            <button
+                                onClick={() => setMostrarForm(!mostrarForm)}
+                                className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition"
+                            >
+                                <i className="fas fa-plus mr-2"></i>
+                                Novo Aviso
+                            </button>
+                        )}
+                    </div>
+
+                    {mostrarForm && (
+                        <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+                            <h3 className="text-xl font-bold mb-4">Criar Novo Aviso</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block mb-2 font-medium">Título</label>
+                                    <input
+                                        type="text"
+                                        value={novoAviso.titulo}
+                                        onChange={(e) => setNovoAviso({...novoAviso, titulo: e.target.value})}
+                                        className="w-full px-4 py-2 border rounded-lg"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium">Tipo</label>
+                                    <select
+                                        value={novoAviso.tipo}
+                                        onChange={(e) => setNovoAviso({...novoAviso, tipo: e.target.value})}
+                                        className="w-full px-4 py-2 border rounded-lg"
+                                    >
+                                        <option value="info">Informação</option>
+                                        <option value="warning">Atenção</option>
+                                        <option value="success">Sucesso</option>
+                                        <option value="error">Urgente</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium">Conteúdo</label>
+                                    <textarea
+                                        value={novoAviso.conteudo}
+                                        onChange={(e) => setNovoAviso({...novoAviso, conteudo: e.target.value})}
+                                        className="w-full px-4 py-2 border rounded-lg h-32"
+                                    />
+                                </div>
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={adicionarAviso}
+                                        className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition"
+                                    >
+                                        Publicar
+                                    </button>
+                                    <button
+                                        onClick={() => setMostrarForm(false)}
+                                        className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="space-y-4">
+                        {avisos.length === 0 ? (
+                            <div className="bg-white p-8 rounded-lg shadow-lg text-center text-gray-500">
+                                <i className="fas fa-inbox text-6xl mb-4"></i>
+                                <p>Nenhum aviso publicado</p>
+                            </div>
+                        ) : (
+                            avisos.map(aviso => (
+                                <div
+                                    key={aviso.id}
+                                    className={`bg-white p-6 rounded-lg shadow-lg border-l-4 ${
+                                        aviso.tipo === 'info' ? 'border-blue-500' :
+                                        aviso.tipo === 'warning' ? 'border-yellow-500' :
+                                        aviso.tipo === 'success' ? 'border-green-500' :
+                                        'border-red-500'
+                                    }`}
+                                >
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div>
+                                            <h3 className="text-xl font-bold">{aviso.titulo}</h3>
+                                            <p className="text-sm text-gray-500">
+                                                {aviso.autor} • {formatarData(aviso.data)}
+                                            </p>
+                                        </div>
+                                        {isAdmin && (
+                                            <button
+                                                onClick={() => setAvisos(avisos.filter(a => a.id !== aviso.id))}
+                                                className="text-red-600 hover:text-red-800"
+                                            >
+                                                <i className="fas fa-trash"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="text-gray-700">{aviso.conteudo}</p>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Informações
+        function Informacoes() {
+            return (
+                <div>
+                    <h2 className="text-3xl font-bold mb-6">Informações do Sistema</h2>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-lg shadow-lg">
+                            <h3 className="text-xl font-bold mb-4 flex items-center">
+                                <i className="fas fa-info-circle text-blue-600 mr-2"></i>
+                                Sobre o Sistema
+                            </h3>
+                            <div className="space-y-3 text-gray-700">
+                                <p><strong>Nome:</strong> Sistema de Gestão de Funcionários</p>
+                                <p><strong>Versão:</strong> 1.0.0</p>
+                                <p><strong>Desenvolvido para:</strong> Gestão de RH</p>
+                                <p><strong>Funcionalidades:</strong></p>
+                                <ul className="list-disc pl-6 space-y-1">
+                                    <li>Cadastro de Empresas</li>
+                                    <li>Gestão de Funcionários (CLT e Terceiros)</li>
+                                    <li>Controle de Rendimentos</li>
+                                    <li>Registro de Jornada (Ponto Eletrônico)</li>
+                                    <li>Sistema de Avisos e Comunicados</li>
+                                    <li>Dashboard com Métricas</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow-lg">
+                            <h3 className="text-xl font-bold mb-4 flex items-center">
+                                <i className="fas fa-user-shield text-green-600 mr-2"></i>
+                                Tipos de Usuários
+                            </h3>
+                            <div className="space-y-4">
+                                <div className="p-4 bg-red-50 rounded">
+                                    <h4 className="font-bold text-red-700 mb-2">
+                                        <i className="fas fa-crown mr-2"></i>Administrador
+                                    </h4>
+                                    <ul className="list-disc pl-6 text-sm text-gray-700">
+                                        <li>Acesso completo ao sistema</li>
+                                        <li>Cadastro de empresas e funcionários</li>
+                                        <li>Visualização de todos os dados</li>
+                                        <li>Publicação de avisos</li>
+                                        <li>Edição e exclusão de registros</li>
+                                    </ul>
+                                </div>
+
+                                <div className="p-4 bg-blue-50 rounded">
+                                    <h4 className="font-bold text-blue-700 mb-2">
+                                        <i className="fas fa-user mr-2"></i>Funcionário
+                                    </h4>
+                                    <ul className="list-disc pl-6 text-sm text-gray-700">
+                                        <li>Visualização dos próprios dados</li>
+                                        <li>Consulta de rendimentos</li>
+                                        <li>Registro de ponto</li>
+                                        <li>Visualização de avisos</li>
+                                        <li>Acesso somente leitura</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow-lg">
+                            <h3 className="text-xl font-bold mb-4 flex items-center">
+                                <i className="fas fa-book text-purple-600 mr-2"></i>
+                                Guia Rápido
+                            </h3>
+                            <div className="space-y-3 text-gray-700 text-sm">
+                                <div>
+                                    <h4 className="font-bold mb-1">1. Cadastrar Empresa</h4>
+                                    <p>Acesse "Empresas" → "Nova Empresa" → Preencha os dados</p>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold mb-1">2. Cadastrar Funcionário</h4>
+                                    <p>Acesse "Funcionários" → "Novo Funcionário" → Preencha os dados</p>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold mb-1">3. Visualizar Holerite</h4>
+                                    <p>Acesse "Rendimentos" → Selecione funcionário e período</p>
+                                </div>
+                                <div>
+                                    <h4 className="font-bold mb-1">4. Registrar Ponto</h4>
+                                    <p>Acesse "Jornada" → Clique no tipo de registro</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow-lg">
+                            <h3 className="text-xl font-bold mb-4 flex items-center">
+                                <i className="fas fa-headset text-orange-600 mr-2"></i>
+                                Suporte
+                            </h3>
+                            <div className="space-y-3 text-gray-700">
+                                <p><strong>Email:</strong> suporte@empresa.com.br</p>
+                                <p><strong>Telefone:</strong> (67) 3333-4444</p>
+                                <p><strong>Horário:</strong> Segunda a Sexta, 8h às 18h</p>
+                                <div className="mt-4 p-4 bg-yellow-50 rounded">
+                                    <p className="text-sm">
+                                        <i className="fas fa-exclamation-triangle text-yellow-600 mr-2"></i>
+                                        <strong>Importante:</strong> Em caso de problemas, entre em contato com o suporte técnico.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Renderizar aplicação
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
