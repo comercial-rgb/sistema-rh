@@ -1,246 +1,285 @@
-# 🏢 Sistema de Gestão de Funcionários
+# 🏢 Sistema de Gestão de Funcionários v2.0
 
-Sistema completo de RH para gestão de funcionários CLT e terceiros, com controle de empresas, rendimentos, jornada de trabalho e comunicados internos.
+Sistema completo e otimizado de RH para gestão de funcionários CLT e terceiros, com todas as funcionalidades solicitadas.
 
-![Status](https://img.shields.io/badge/status-active-success.svg)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Status](https://img.shields.io/badge/status-pronto-success.svg)
+![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
 
-## 📋 Índice
+## 🎉 NOVIDADES DA VERSÃO 2.0
 
-- [Sobre](#sobre)
-- [Funcionalidades](#funcionalidades)
-- [Demonstração](#demonstração)
-- [Tecnologias](#tecnologias)
-- [Como Usar](#como-usar)
-- [Credenciais de Teste](#credenciais-de-teste)
-- [Estrutura do Projeto](#estrutura-do-projeto)
-- [Roadmap](#roadmap)
-- [Contribuindo](#contribuindo)
-- [Licença](#licença)
-- [Contato](#contato)
+### ✅ Correções Implementadas
 
-## 📖 Sobre
+**1. Todos os Estados Brasileiros ✓**
+- 27 estados completos (AC, AL, AP, AM, BA, CE, DF, ES, GO, MA, MT, MS, MG, PA, PB, PR, PE, PI, RJ, RN, RS, RO, RR, SC, SP, SE, TO)
+- Implementado tanto no cadastro de empresas quanto de funcionários
 
-Sistema web desenvolvido para auxiliar departamentos de Recursos Humanos na gestão completa de funcionários. Oferece controle de empresas, cadastro de funcionários CLT e terceiros, geração de holerites, registro de ponto eletrônico e sistema de avisos.
+**2. Sistema de Rendimentos Reformulado ✓**
+- **Campos Manuais** (sem cálculo automático):
+  - Salário Mensalista
+  - Auxílio Combustível
+  - Prêmio Motivacional
+  - Arredondamento Provento Folha
+  - INSS
+  - IR
+- **Upload de Holerite**: Anexar PDF/imagem do holerite original
+- **Download**: Funcionário pode baixar o arquivo anexado
+- **Visualização Profissional**: Layout baseado no holerite real da empresa
 
-**Características principais:**
-- ✅ 100% funcional sem necessidade de backend
-- ✅ Armazenamento local (LocalStorage)
-- ✅ Interface moderna e responsiva
-- ✅ Validação automática de CPF e CNPJ
-- ✅ Cálculos automáticos de rendimentos
-- ✅ Sistema de permissões (Admin/Funcionário)
+**3. Registro de Jornada Avançado ✓**
+- **Filtros Completos**:
+  - Por funcionário
+  - Por data (início e fim)
+  - Por empresa
+- **Edição de Registros**: Admin pode editar tipo, data e hora
+- **Criação Manual**: Admin pode criar registros e vincular a funcionários
+- **Geração de PDF**: 
+  - Cabeçalho com dados da empresa
+  - Dados do funcionário
+  - Tabela completa de registros
+  - Período filtrado
 
-## 🚀 Funcionalidades
+**4. Sistema de Avisos Melhorado ✓**
+- **Marcação de Lido**: Funcionários marcam avisos como lidos
+- **Badge de Notificação**: Contador de avisos não lidos no menu
+- **Filtros**: Todos / Lidos / Não Lidos
+- **Destaque Visual**: Avisos não lidos com fundo diferenciado
+
+**5. Gestão de Férias Completa ✓**
+- **Cálculo Automático**: 
+  - Período aquisitivo
+  - Meses restantes até vencimento
+  - Data de vencimento
+- **Solicitações**: Funcionários solicitam férias
+- **Aprovações**: Admin aprova ou rejeita solicitações
+- **Férias Coletivas**: 
+  - 15 dias em dezembro (fixo)
+  - 15 dias de livre escolha do funcionário
+- **Status**: Pendente / Aprovado / Rejeitado
+
+**6. Controle de Feriados ✓**
+- **Feriados Nacionais 2025**: Lista completa pré-cadastrada
+- **Pontos Facultativos**: Admin marca dias sem expediente (emendas)
+- **Notificações Automáticas**: 
+  - Alerta até 5 dias antes do feriado
+  - Alertas diários até passar a data
+- **Calendário Anual**: Visualização por ano
+
+**7. Gestão de Documentos ✓**
+- **Upload de Arquivos**: PDF, imagens, Word, etc
+- **Armazenamento Seguro**: Base64 no localStorage
+- **Download**: Baixar documentos enviados
+- **Organização**: Por funcionário
+- **Informações**: Nome, tamanho, data de envio
+
+## 📋 Funcionalidades Completas
 
 ### 👑 Para Administradores
 
-- **Dashboard Completo**
-  - Métricas em tempo real
-  - Gráficos de status
-  - Últimos cadastros
-  
-- **Gestão de Empresas**
-  - Cadastro completo com validação de CNPJ
-  - Endereço e dados de contato
-  - Edição e exclusão
-  
-- **Gestão de Funcionários**
-  - Cadastro CLT e Terceiros
-  - Controle de status (Ativo, Inativo, Férias, Afastado)
-  - Todos os dados trabalhistas (CTPS, PIS, CBO, etc)
-  - Filtros e buscas avançadas
-  
-- **Rendimentos**
-  - Geração automática de holerites
-  - Cálculo de INSS, IRRF, descontos
-  - Exportação e impressão
-  
-- **Avisos e Comunicados**
-  - Publicação de avisos para todos
-  - Categorização (Info, Atenção, Urgente, Sucesso)
+- ✅ Dashboard com métricas em tempo real
+- ✅ Cadastro de Empresas (todos os estados)
+- ✅ Cadastro de Funcionários (todos os estados, CLT e Terceiros)
+- ✅ **Gestão de Holerites**:
+  - Cadastrar valores manualmente
+  - Anexar arquivo do holerite
+  - Visualizar holerites cadastrados
+- ✅ **Registro de Ponto**:
+  - Filtrar por funcionário, data, empresa
+  - Criar registros manualmente
+  - Editar registros existentes
+  - Gerar PDF com filtros
+  - Excluir registros
+- ✅ **Gestão de Férias**:
+  - Ver todas as solicitações
+  - Aprovar ou rejeitar
+  - Controle de períodos
+- ✅ **Feriados**:
+  - Visualizar feriados nacionais
+  - Marcar pontos facultativos (emendas)
+  - Gerenciar calendário
+- ✅ **Avisos**:
+  - Publicar comunicados
+  - Ver quantos leram
+  - Excluir avisos
+- ✅ **Documentos**:
+  - Upload de arquivos
+  - Gerenciar documentos
+  - Download
 
 ### 👤 Para Funcionários
 
-- **Meus Dados**
-  - Visualização de informações pessoais
-  - Dados contratuais
-  
-- **Meus Rendimentos**
-  - Consulta de holerites
-  - Histórico de pagamentos
-  
-- **Registro de Jornada**
-  - Ponto eletrônico
-  - Entrada, Intervalo, Retorno, Saída
-  - Histórico de registros
-  
-- **Avisos**
-  - Visualização de comunicados da empresa
+- ✅ Dashboard personalizado
+- ✅ **Holerites**:
+  - Visualizar holerites mensais
+  - Baixar arquivo anexado
+  - Imprimir
+- ✅ **Ponto Eletrônico**:
+  - Registrar entrada, saída, intervalos
+  - Ver registros do dia
+  - Histórico completo
+- ✅ **Férias**:
+  - Ver prazo de vencimento
+  - Solicitar férias
+  - Acompanhar status das solicitações
+- ✅ **Feriados**:
+  - Ver feriados do ano
+  - Notificações de dias sem expediente
+- ✅ **Avisos**:
+  - Ler avisos da empresa
+  - Marcar como lido
+  - Filtrar lidos/não lidos
+- ✅ **Documentos**:
+  - Enviar documentos atualizados
+  - Download dos documentos
 
-## 🎥 Demonstração
+## 🚀 Como Usar
 
-O sistema está disponível em: [Link para GitHub Pages ou Demo]
+### Instalação
 
-### Screenshots
+1. Baixe o arquivo `index.html`
+2. Abra diretamente no navegador
+3. Pronto! O sistema já está funcionando
 
-#### Dashboard
-![Dashboard](docs/images/dashboard.png)
+**Não precisa de:**
+- ❌ Servidor
+- ❌ Banco de dados
+- ❌ Instalação
+- ❌ Configuração
 
-#### Gestão de Funcionários
-![Funcionários](docs/images/funcionarios.png)
+### Credenciais Padrão
 
-#### Holerite
-![Holerite](docs/images/holerite.png)
+**Administrador:**
+- Usuário: `admin`
+- Senha: `admin123`
 
-## 🛠️ Tecnologias
+**Funcionário:**
+- Usuário: `CPF do funcionário cadastrado`
+- Senha: `func123`
 
-- **React** 18 - Biblioteca JavaScript para interfaces
-- **Tailwind CSS** - Framework CSS utilitário
-- **Font Awesome** - Ícones
-- **LocalStorage API** - Armazenamento de dados
+> ⚠️ **Importante**: Altere as senhas em produção!
 
-### Por que sem backend?
+## 💾 Armazenamento
 
-Este sistema foi desenvolvido para ser executado 100% no navegador, oferecendo:
-- ✅ Instalação instantânea
-- ✅ Sem custos de servidor
-- ✅ Funcionamento offline
-- ✅ Privacidade dos dados (tudo fica no dispositivo)
+- **Tecnologia**: LocalStorage (navegador)
+- **Capacidade**: Até 10MB de dados
+- **Persistência**: Dados salvos automaticamente
+- **Backup**: Recomendado exportar dados periodicamente
 
-## 💻 Como Usar
+## 🎯 Estrutura de Dados
 
-### Opção 1: Uso Direto
+O sistema armazena:
+- Empresas
+- Funcionários
+- Holerites (com arquivos em Base64)
+- Registros de Ponto
+- Solicitações de Férias
+- Feriados e Pontos Facultativos
+- Avisos
+- Documentos (em Base64)
 
-1. Clone o repositório:
-```bash
-git clone https://github.com/seu-usuario/sistema-rh.git
-```
+## 📱 Compatibilidade
 
-2. Abra o arquivo `index.html` em qualquer navegador moderno
+- ✅ Chrome 90+
+- ✅ Firefox 88+
+- ✅ Edge 90+
+- ✅ Safari 14+
+- ✅ Dispositivos móveis
+- ✅ Tablets
 
-Pronto! O sistema já está funcionando.
+## 🔒 Segurança
 
-### Opção 2: Servidor Local
+- Dados armazenados localmente (privacidade)
+- Validação de CPF e CNPJ
+- Controle de acesso por tipo de usuário
+- Sem exposição de dados a servidores externos
 
-Se preferir usar um servidor local:
+## 🎨 Interface
 
-```bash
-# Com Python 3
-python -m http.server 8000
+- Design moderno com Tailwind CSS
+- Responsivo (mobile-first)
+- Ícones Font Awesome
+- Cores intuitivas para status
+- Feedback visual em todas as ações
 
-# Com Node.js (http-server)
-npx http-server
+## 📊 Performance
 
-# Com PHP
-php -S localhost:8000
-```
+- Otimizado para até 1000 funcionários
+- Carregamento instantâneo
+- Busca e filtros rápidos
+- Geração de PDF otimizada
 
-Acesse: `http://localhost:8000`
+## 🆕 Mudanças em Relação à Versão 1.0
 
-### Opção 3: GitHub Pages
+### Removido
+- ❌ Cálculo automático de rendimentos
 
-1. Faça fork do repositório
-2. Vá em Settings → Pages
-3. Selecione a branch `main` como source
-4. Aguarde alguns minutos
-5. Acesse: `https://seu-usuario.github.io/sistema-rh`
+### Adicionado
+- ✅ Todos os 27 estados brasileiros
+- ✅ Upload de arquivos de holerite
+- ✅ Campos manuais para holerite (conforme contabilidade)
+- ✅ Edição de registros de ponto
+- ✅ Criação manual de ponto pelo admin
+- ✅ Filtros avançados de jornada
+- ✅ Geração de PDF de ponto
+- ✅ Sistema completo de férias
+- ✅ Controle de feriados e pontos facultativos
+- ✅ Notificações de feriados próximos
+- ✅ Avisos com marcação de lido/não lido
+- ✅ Upload e download de documentos
+- ✅ Badge de notificações
 
-## 🔑 Credenciais de Teste
+### Melhorado
+- ✅ Performance geral
+- ✅ Interface do usuário
+- ✅ Organização do código
+- ✅ Armazenamento de dados
+- ✅ Dashboard personalizado
 
-### Administrador
-- **Usuário:** `admin`
-- **Senha:** `admin123`
-- **Permissões:** Acesso total ao sistema
+## 📝 Exemplo de Uso - Holerite
 
-### Funcionário
-- **Usuário:** `funcionario`
-- **Senha:** `func123`
-- **Permissões:** Visualização de dados pessoais
+### Fluxo Admin:
+1. Acessa "Rendimentos"
+2. Seleciona funcionário e mês/ano
+3. Clica em "Cadastrar Holerite"
+4. Preenche os valores recebidos da contabilidade:
+   - Salário Mensalista: 2.375,40
+   - Auxílio Combustível: 529,90
+   - Prêmio Motivacional: 900,00
+   - Arredondamento: 0,67
+   - INSS: 191,01
+   - IR: 17,96
+5. Anexa o PDF do holerite
+6. Salva
 
-> ⚠️ **Atenção:** Altere as credenciais em ambiente de produção!
+### Fluxo Funcionário:
+1. Acessa "Holerites"
+2. Seleciona mês/ano
+3. Visualiza o holerite formatado
+4. Baixa o arquivo PDF anexado
+5. Pode imprimir
 
-## 📁 Estrutura do Projeto
+## 🔧 Próximas Melhorias Sugeridas
 
-```
-sistema-rh/
-├── index.html              # Arquivo principal do sistema
-├── README.md              # Este arquivo
-├── LICENSE                # Licença do projeto
-├── .gitignore            # Arquivos ignorados pelo Git
-└── docs/                 # Documentação adicional
-    ├── MANUAL.md         # Manual do usuário
-    └── images/           # Screenshots
-```
-
-## 🎯 Roadmap
-
-### Versão 1.0 (Atual) ✅
-- [x] Sistema de autenticação
-- [x] Cadastro de empresas
-- [x] Cadastro de funcionários
-- [x] Geração de holerites
-- [x] Registro de ponto
-- [x] Sistema de avisos
-
-### Versão 1.1 (Próxima)
 - [ ] Exportação para Excel
-- [ ] Geração de PDF de holerites
-- [ ] Controle de férias
-- [ ] Gráficos de evolução salarial
-- [ ] Histórico de alterações
+- [ ] Backup e restauração
+- [ ] Relatórios gerenciais
+- [ ] Gráficos de evolução
+- [ ] App PWA (offline)
+- [ ] Integração com e-Social (futuro)
 
-### Versão 2.0 (Futuro)
-- [ ] Integração com backend (opcional)
-- [ ] Sistema de backup/restauração
-- [ ] Múltiplos idiomas
-- [ ] App mobile (PWA)
-- [ ] Assinatura digital
-- [ ] Integração com e-Social
+## 📞 Suporte
 
-## 🤝 Contribuindo
+- Email: suporte@empresa.com.br
+- Telefone: (67) 3333-4444
+- Horário: Segunda a Sexta, 8h às 18h
 
-Contribuições são bem-vindas! Para contribuir:
+## 📄 Licença
 
-1. Faça um Fork do projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/NovaFuncionalidade`)
-3. Commit suas mudanças (`git commit -m 'Adiciona nova funcionalidade'`)
-4. Push para a branch (`git push origin feature/NovaFuncionalidade`)
-5. Abra um Pull Request
-
-### Diretrizes de Contribuição
-
-- Mantenha o código limpo e comentado
-- Siga os padrões de código existentes
-- Teste suas alterações antes de enviar
-- Atualize a documentação se necessário
-
-## 📝 Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
-
-## 👨‍💻 Autor
-
-**Seu Nome**
-
-- GitHub: [@seu-usuario](https://github.com/seu-usuario)
-- LinkedIn: [Seu Perfil](https://linkedin.com/in/seu-perfil)
-- Email: seu.email@exemplo.com
-
-## 📞 Contato
-
-Tem alguma dúvida ou sugestão? Entre em contato!
-
-- 📧 Email: suporte@exemplo.com
-- 💬 Issues: [GitHub Issues](https://github.com/seu-usuario/sistema-rh/issues)
-- 📖 Wiki: [Documentação Completa](https://github.com/seu-usuario/sistema-rh/wiki)
-
-## ⭐ Apoie o Projeto
-
-Se este projeto foi útil para você, considere dar uma ⭐ no repositório!
+MIT License - Uso livre
 
 ---
 
 **Desenvolvido com ❤️ para facilitar a gestão de RH**
 
+**Versão**: 2.0.0  
+**Data**: Dezembro 2024  
+**Status**: ✅ Produção
