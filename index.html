@@ -8,11 +8,37 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3B82F6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1E2A5E'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        :root {
+            --color-primary: #3B82F6;
+            --color-primary-dark: #1E2A5E;
+        }
     </style>
 </head>
 <body>
@@ -68,6 +94,63 @@
             '2025-12-25': 'Natal'
         };
 
+        const FERIADOS_NACIONAIS_2026 = {
+            '2026-01-01': 'Confraternização Universal',
+            '2026-02-16': 'Carnaval',
+            '2026-02-17': 'Carnaval',
+            '2026-04-03': 'Sexta-feira Santa',
+            '2026-04-21': 'Tiradentes',
+            '2026-05-01': 'Dia do Trabalho',
+            '2026-06-04': 'Corpus Christi',
+            '2026-09-07': 'Independência do Brasil',
+            '2026-10-12': 'Nossa Senhora Aparecida',
+            '2026-11-02': 'Finados',
+            '2026-11-15': 'Proclamação da República',
+            '2026-11-20': 'Consciência Negra',
+            '2026-12-25': 'Natal'
+        };
+
+        // Tipos de documentos
+        const TIPOS_DOCUMENTOS = [
+            { id: 'cpf_rg_cnh', nome: 'CPF / RG / CNH', icon: 'id-card', cor: 'blue' },
+            { id: 'comprovante_endereco', nome: 'Comprovante de Endereço', icon: 'home', cor: 'green' },
+            { id: 'carteira_trabalho', nome: 'Carteira de Trabalho', icon: 'briefcase', cor: 'purple' },
+            { id: 'pis', nome: 'PIS', icon: 'file-alt', cor: 'orange' },
+            { id: 'certidao_casamento', nome: 'Certidão de Casamento', icon: 'heart', cor: 'pink' },
+            { id: 'certidao_nascimento', nome: 'Certidão de Nascimento', icon: 'baby', cor: 'cyan' },
+            { id: 'foto', nome: 'Foto do Funcionário', icon: 'camera', cor: 'indigo' },
+            { id: 'outros', nome: 'Outros Documentos', icon: 'folder', cor: 'gray' }
+        ];
+
+        // Componente Logo InstaSolutions
+        function LogoInstaSolutions({ size = 'md', showText = true, textColor = 'dark', variant = 'vertical' }) {
+            const sizes = {
+                sm: { width: 32, height: 32 },
+                md: { width: 48, height: 48 },
+                lg: { width: 120, height: 100 },
+                xl: { width: 180, height: 150 }
+            };
+            const s = sizes[size] || sizes.md;
+            
+            // Variantes de logo disponíveis
+            const logos = {
+                vertical: 'assets/InstaSolutions-LockupVertical-Cores.png',
+                horizontal: 'assets/InstaSolutions-LockupAlternativo-Cores (1).jpg',
+                symbol: 'assets/InstaSolutions-Símbolo-Cores.jpg'
+            };
+            
+            return (
+                <div className="flex items-center justify-center">
+                    <img 
+                        src={logos[variant] || logos.vertical} 
+                        alt="InstaSolutions" 
+                        style={{ width: s.width, height: 'auto', maxHeight: s.height * 1.5 }}
+                        className="object-contain"
+                    />
+                </div>
+            );
+        }
+
         // Funções auxiliares
         const validarCPF = (cpf) => {
             cpf = cpf.replace(/[^\d]/g, '');
@@ -112,6 +195,65 @@
         const formatarMoeda = (valor) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
         const formatarData = (data) => data ? new Date(data + 'T00:00:00').toLocaleDateString('pt-BR') : '';
 
+        // Funções para formatação de moeda em inputs
+        const formatarMoedaInput = (valor) => {
+            if (!valor) return '';
+            const numero = String(valor).replace(/\D/g, '');
+            if (!numero) return '';
+            const valorNumerico = parseInt(numero) / 100;
+            return valorNumerico.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+
+        const parseMoedaInput = (valor) => {
+            if (!valor) return 0;
+            const limpo = String(valor).replace(/\./g, '').replace(',', '.');
+            return parseFloat(limpo) || 0;
+        };
+
+        // Componente de Input de Moeda
+        function InputMoeda({ value, onChange, placeholder, className }) {
+            const [displayValue, setDisplayValue] = useState('');
+
+            useEffect(() => {
+                if (value !== undefined && value !== null && value !== '') {
+                    const valorNumerico = parseFloat(value) || 0;
+                    if (valorNumerico > 0) {
+                        setDisplayValue(valorNumerico.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                    }
+                }
+            }, []);
+
+            const handleChange = (e) => {
+                let inputValue = e.target.value;
+                // Remove tudo exceto números
+                const apenasNumeros = inputValue.replace(/\D/g, '');
+                if (!apenasNumeros) {
+                    setDisplayValue('');
+                    onChange(0);
+                    return;
+                }
+                // Converte para valor decimal (divide por 100)
+                const valorNumerico = parseInt(apenasNumeros) / 100;
+                // Formata para exibição
+                const valorFormatado = valorNumerico.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                setDisplayValue(valorFormatado);
+                onChange(valorNumerico);
+            };
+
+            return (
+                <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">R$</span>
+                    <input
+                        type="text"
+                        value={displayValue}
+                        onChange={handleChange}
+                        placeholder={placeholder || '0,00'}
+                        className={`${className} pl-10`}
+                    />
+                </div>
+            );
+        }
+
         const calcularDiasFerias = (dataAdmissao) => {
             const hoje = new Date();
             const admissao = new Date(dataAdmissao);
@@ -155,7 +297,10 @@
 
         // Componente Principal
         function App() {
-            const [usuarioLogado, setUsuarioLogado] = useState(null);
+            const [usuarioLogado, setUsuarioLogado] = useState(() => {
+                // Recupera sessão salva ao carregar
+                return Storage.load('sistemaRH_sessao', null);
+            });
             const [paginaAtual, setPaginaAtual] = useState('dashboard');
             const [dados, setDados] = useState({
                 empresas: [],
@@ -164,9 +309,22 @@
                 registrosPonto: [],
                 holerites: [],
                 solicitacoesFerias: [],
+                historicoFerias: [],
                 feriadosPontoFacultativo: [],
-                documentos: []
+                documentos: [],
+                planosSaude: []
             });
+
+            // Salva sessão quando usuário faz login/logout
+            const handleLogin = (usuario) => {
+                setUsuarioLogado(usuario);
+                Storage.save('sistemaRH_sessao', usuario);
+            };
+
+            const handleLogout = () => {
+                setUsuarioLogado(null);
+                Storage.save('sistemaRH_sessao', null);
+            };
 
             useEffect(() => {
                 const dadosSalvos = Storage.load('sistemaRH_v2', {
@@ -176,8 +334,10 @@
                     registrosPonto: [],
                     holerites: [],
                     solicitacoesFerias: [],
+                    historicoFerias: [],
                     feriadosPontoFacultativo: [],
-                    documentos: []
+                    documentos: [],
+                    planosSaude: []
                 });
                 setDados(dadosSalvos);
             }, []);
@@ -197,7 +357,7 @@
             ).length;
 
             if (!usuarioLogado) {
-                return <Login onLogin={setUsuarioLogado} funcionarios={dados.funcionarios} />;
+                return <Login onLogin={handleLogin} funcionarios={dados.funcionarios} />;
             }
 
             return (
@@ -206,7 +366,7 @@
                         usuario={usuarioLogado} 
                         paginaAtual={paginaAtual}
                         setPagina={setPaginaAtual}
-                        onLogout={() => setUsuarioLogado(null)}
+                        onLogout={handleLogout}
                         avisosNaoLidos={avisosNaoLidos}
                     />
                     <div className="flex-1 overflow-auto">
@@ -239,6 +399,9 @@
                             {paginaAtual === 'documentos' && (
                                 <Documentos dados={dados} atualizar={atualizarDados} usuarioLogado={usuarioLogado} />
                             )}
+                            {paginaAtual === 'plano-saude' && (
+                                <PlanoSaude dados={dados} atualizar={atualizarDados} usuarioLogado={usuarioLogado} />
+                            )}
                             {paginaAtual === 'informacoes' && (
                                 <Informacoes />
                             )}
@@ -253,50 +416,118 @@
             const [usuario, setUsuario] = useState('');
             const [senha, setSenha] = useState('');
             const [erro, setErro] = useState('');
+            const [mostrarAjuda, setMostrarAjuda] = useState(false);
+
+            // Funcionário de teste padrão (CPF válido)
+            const FUNCIONARIO_TESTE = {
+                cpf: '12345678909',
+                cpfFormatado: '123.456.789-09',
+                nome: 'Funcionário Teste'
+            };
 
             const handleLogin = (e) => {
                 e.preventDefault();
+                setErro('');
+                
+                // Login Admin
                 if (usuario === 'admin' && senha === 'admin123') {
                     onLogin({ nome: 'Administrador', tipo: 'admin', id: 'admin' });
-                } else {
-                    const func = funcionarios.find(f => f.cpf.replace(/[^\d]/g, '') === usuario.replace(/[^\d]/g, ''));
-                    if (func && senha === 'func123') {
+                    return;
+                }
+                
+                // Login com funcionário de teste
+                const cpfLimpo = usuario.replace(/[^\d]/g, '');
+                if (cpfLimpo === FUNCIONARIO_TESTE.cpf && senha === 'func123') {
+                    // Busca se já existe um funcionário com este CPF
+                    let func = funcionarios.find(f => f.cpf.replace(/[^\d]/g, '') === cpfLimpo);
+                    if (func) {
                         onLogin({ nome: func.nome, tipo: 'funcionario', id: func.id, cpf: func.cpf });
                     } else {
-                        setErro('Usuário ou senha inválidos');
+                        // Cria o funcionário de teste no momento do login
+                        const novoFunc = {
+                            id: Date.now(),
+                            nome: FUNCIONARIO_TESTE.nome,
+                            cpf: FUNCIONARIO_TESTE.cpfFormatado,
+                            cargo: 'Analista',
+                            dataAdmissao: '2024-01-15',
+                            status: 'Ativo',
+                            tipoVinculo: 'CLT',
+                            departamento: 'Administrativo'
+                        };
+                        // Salva o funcionário no localStorage
+                        const dadosAtuais = Storage.load('sistemaRH_v2', { funcionarios: [] });
+                        dadosAtuais.funcionarios.push(novoFunc);
+                        Storage.save('sistemaRH_v2', dadosAtuais);
+                        onLogin({ nome: novoFunc.nome, tipo: 'funcionario', id: novoFunc.id, cpf: novoFunc.cpf });
                     }
+                    return;
                 }
+                
+                // Login com funcionário cadastrado
+                const func = funcionarios.find(f => f.cpf.replace(/[^\d]/g, '') === cpfLimpo);
+                if (func && senha === 'func123') {
+                    onLogin({ nome: func.nome, tipo: 'funcionario', id: func.id, cpf: func.cpf });
+                    return;
+                }
+                
+                setErro('Usuário ou senha inválidos. Verifique as credenciais abaixo.');
             };
 
             return (
-                <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+                <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-500 to-primary-900">
                     <div className="bg-white p-8 rounded-lg shadow-2xl w-96">
                         <div className="text-center mb-8">
-                            <i className="fas fa-users-cog text-6xl text-blue-600 mb-4"></i>
-                            <h1 className="text-3xl font-bold text-gray-800">Sistema RH</h1>
-                            <p className="text-gray-600 mt-2">Gestão de Funcionários</p>
+                            <LogoInstaSolutions size="xl" variant="vertical" />
+                            <p className="text-gray-600 mt-3">Sistema de Gestão de RH</p>
                         </div>
                         <form onSubmit={handleLogin}>
                             <div className="mb-4">
                                 <label className="block text-gray-700 mb-2">Usuário / CPF</label>
                                 <input type="text" value={usuario} onChange={(e) => setUsuario(e.target.value)}
-                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="Digite seu usuário ou CPF" />
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                    placeholder="Digite admin ou CPF" />
                             </div>
                             <div className="mb-6">
                                 <label className="block text-gray-700 mb-2">Senha</label>
                                 <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)}
-                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                                     placeholder="Digite sua senha" />
                             </div>
-                            {erro && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg">{erro}</div>}
-                            <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">
+                            {erro && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{erro}</div>}
+                            <button type="submit" className="w-full bg-primary-500 text-white py-2 rounded-lg hover:bg-primary-600 transition">
                                 Entrar
                             </button>
                         </form>
-                        <div className="mt-6 text-sm text-gray-600 text-center">
-                            <p>Admin: admin / admin123</p>
-                            <p>Funcionário: CPF / func123</p>
+                        
+                        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                            <button onClick={() => setMostrarAjuda(!mostrarAjuda)} 
+                                className="w-full text-sm text-primary-500 hover:text-primary-700 flex items-center justify-center gap-2">
+                                <i className={`fas fa-chevron-${mostrarAjuda ? 'up' : 'down'}`}></i>
+                                Credenciais de Teste
+                            </button>
+                            {mostrarAjuda && (
+                                <div className="mt-3 space-y-3 text-sm">
+                                    <div className="p-3 bg-red-50 rounded border-l-4 border-red-500">
+                                        <p className="font-bold text-red-700">Admin</p>
+                                        <p className="text-gray-700">Usuário: <code className="bg-gray-200 px-1 rounded">admin</code></p>
+                                        <p className="text-gray-700">Senha: <code className="bg-gray-200 px-1 rounded">admin123</code></p>
+                                    </div>
+                                    <div className="p-3 bg-primary-50 rounded border-l-4 border-primary-500">
+                                        <p className="font-bold text-primary-600">Funcionário Teste</p>
+                                        <p className="text-gray-700">CPF: <code className="bg-gray-200 px-1 rounded">123.456.789-09</code></p>
+                                        <p className="text-gray-700">Senha: <code className="bg-gray-200 px-1 rounded">func123</code></p>
+                                    </div>
+                                    {funcionarios.length > 0 && (
+                                        <div className="p-3 bg-green-50 rounded border-l-4 border-green-500">
+                                            <p className="font-bold text-green-700">Funcionários Cadastrados</p>
+                                            {funcionarios.slice(0, 3).map(f => (
+                                                <p key={f.id} className="text-gray-700 text-xs">{f.nome}: <code className="bg-gray-200 px-1 rounded">{f.cpf}</code></p>
+                                            ))}
+                                            <p className="text-gray-600 text-xs mt-1">Senha: func123</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -314,6 +545,7 @@
                 { id: 'jornada', icon: 'clock', label: 'Jornada' },
                 { id: 'ferias', icon: 'umbrella-beach', label: 'Férias' },
                 { id: 'feriados', icon: 'calendar-alt', label: 'Feriados' },
+                { id: 'plano-saude', icon: 'medkit', label: 'Plano de Saúde' },
                 { id: 'avisos', icon: 'bullhorn', label: 'Avisos', badge: avisosNaoLidos },
                 { id: 'documentos', icon: 'file-alt', label: 'Documentos' },
                 { id: 'informacoes', icon: 'info-circle', label: 'Informações' },
@@ -323,24 +555,28 @@
                 { id: 'jornada', icon: 'clock', label: 'Meu Ponto' },
                 { id: 'ferias', icon: 'umbrella-beach', label: 'Férias' },
                 { id: 'feriados', icon: 'calendar-alt', label: 'Feriados' },
+                { id: 'plano-saude', icon: 'medkit', label: 'Plano de Saúde' },
                 { id: 'avisos', icon: 'bullhorn', label: 'Avisos', badge: avisosNaoLidos },
                 { id: 'documentos', icon: 'file-alt', label: 'Documentos' },
             ];
 
             return (
-                <div className="w-64 bg-gray-900 text-white flex flex-col">
-                    <div className="p-6 border-b border-gray-800">
-                        <h1 className="text-xl font-bold">Sistema RH</h1>
-                        <p className="text-sm text-gray-400 mt-1 truncate">{usuario.nome}</p>
-                        <span className={`inline-block px-2 py-1 text-xs rounded mt-2 ${usuario.tipo === 'admin' ? 'bg-red-600' : 'bg-blue-600'}`}>
-                            {usuario.tipo === 'admin' ? 'Admin' : 'Funcionário'}
+                <div className="w-64 bg-primary-900 text-white flex flex-col">
+                    <div className="p-5 border-b border-primary-800">
+                        <div className="flex items-center gap-3 mb-3">
+                            <LogoInstaSolutions size="sm" variant="symbol" />
+                            <span className="text-lg font-bold text-white">InstaSolutions</span>
+                        </div>
+                        <p className="text-sm text-gray-300 truncate">{usuario.nome}</p>
+                        <span className={`inline-block px-2 py-1 text-xs rounded mt-2 ${usuario.tipo === 'admin' ? 'bg-red-500' : 'bg-primary-500'}`}>
+                            {usuario.tipo === 'admin' ? 'Administrador' : 'Funcionário'}
                         </span>
                     </div>
                     <nav className="flex-1 p-4 overflow-y-auto scrollbar-hide">
                         {menuItems.map(item => (
                             <button key={item.id} onClick={() => setPagina(item.id)}
                                 className={`w-full text-left px-4 py-3 rounded-lg mb-2 flex items-center justify-between transition ${
-                                    paginaAtual === item.id ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'
+                                    paginaAtual === item.id ? 'bg-primary-500 text-white' : 'text-gray-300 hover:bg-primary-800'
                                 }`}>
                                 <div className="flex items-center">
                                     <i className={`fas fa-${item.icon} mr-3`}></i>
@@ -394,7 +630,7 @@
                     <div>
                         <h2 className="text-3xl font-bold mb-6">Meu Painel</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                            <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
+                            <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-primary-500">
                                 <p className="text-gray-600 mb-2">Cargo</p>
                                 <p className="text-xl font-bold text-gray-800">{meusDados.cargo}</p>
                             </div>
@@ -452,27 +688,270 @@
             }
 
             // Dashboard Admin
+            const funcionariosAtivos = dados.funcionarios.filter(f => f.status === 'Ativo').length;
+            const funcionariosFerias = dados.funcionarios.filter(f => f.status === 'Férias').length;
+            const funcionariosAfastados = dados.funcionarios.filter(f => f.status === 'Afastado').length;
+            const totalHolerites = dados.holerites.length;
+            const avisosAtivos = dados.avisos.length;
+            const solicitacoesPendentes = dados.solicitacoesFerias.filter(s => s.status === 'Pendente').length;
+
+            // Próximos aniversários de empresa (baseado na data de admissão)
+            const hoje = new Date();
+            const proximosAniversariosEmpresa = dados.funcionarios
+                .filter(f => f.dataAdmissao)
+                .map(f => {
+                    const admissao = new Date(f.dataAdmissao);
+                    const proximoAniversario = new Date(hoje.getFullYear(), admissao.getMonth(), admissao.getDate());
+                    if (proximoAniversario < hoje) {
+                        proximoAniversario.setFullYear(hoje.getFullYear() + 1);
+                    }
+                    const diasRestantes = Math.ceil((proximoAniversario - hoje) / (1000 * 60 * 60 * 24));
+                    return { ...f, diasRestantes, proximoAniversario, tipo: 'empresa' };
+                })
+                .filter(f => f.diasRestantes <= 30)
+                .sort((a, b) => a.diasRestantes - b.diasRestantes)
+                .slice(0, 5);
+
+            // Próximos aniversários de nascimento
+            const proximosAniversariosNascimento = dados.funcionarios
+                .filter(f => f.dataNascimento)
+                .map(f => {
+                    const nascimento = new Date(f.dataNascimento);
+                    const proximoAniversario = new Date(hoje.getFullYear(), nascimento.getMonth(), nascimento.getDate());
+                    if (proximoAniversario < hoje) {
+                        proximoAniversario.setFullYear(hoje.getFullYear() + 1);
+                    }
+                    const diasRestantes = Math.ceil((proximoAniversario - hoje) / (1000 * 60 * 60 * 24));
+                    return { ...f, diasRestantes, proximoAniversario, tipo: 'nascimento' };
+                })
+                .filter(f => f.diasRestantes <= 30)
+                .sort((a, b) => a.diasRestantes - b.diasRestantes)
+                .slice(0, 5);
+
             return (
                 <div>
-                    <h2 className="text-3xl font-bold mb-6">Dashboard Administrativo</h2>
+                    <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-3xl font-bold text-primary-900">Dashboard</h2>
+                        <div className="text-sm text-gray-500">
+                            <i className="fas fa-clock mr-1"></i>
+                            {hoje.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                        </div>
+                    </div>
+
+                    {/* Cards Principais */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        {[
-                            { titulo: 'Empresas', valor: dados.empresas.length, icon: 'building', cor: 'blue' },
-                            { titulo: 'Funcionários', valor: dados.funcionarios.length, icon: 'users', cor: 'green' },
-                            { titulo: 'Ativos', valor: dados.funcionarios.filter(f => f.status === 'Ativo').length, icon: 'user-check', cor: 'purple' },
-                            { titulo: 'CLT', valor: dados.funcionarios.filter(f => f.tipoVinculo === 'CLT').length, icon: 'id-card', cor: 'orange' },
-                        ].map((card, i) => (
-                            <div key={i} className={`bg-white p-6 rounded-lg shadow-lg border-l-4 border-${card.cor}-500`}>
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-gray-600 mb-2">{card.titulo}</p>
-                                        <p className="text-4xl font-bold text-gray-800">{card.valor}</p>
-                                    </div>
-                                    <i className={`fas fa-${card.icon} text-5xl text-${card.cor}-500 opacity-20`}></i>
+                        <div className="bg-gradient-to-r from-primary-500 to-primary-600 p-6 rounded-xl shadow-lg text-white">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-primary-100 text-sm">Total Funcionários</p>
+                                    <p className="text-4xl font-bold">{dados.funcionarios.length}</p>
+                                </div>
+                                <div className="w-14 h-14 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                                    <i className="fas fa-users text-2xl"></i>
                                 </div>
                             </div>
-                        ))}
+                            <div className="mt-4 flex items-center text-primary-100 text-sm">
+                                <span className="bg-white bg-opacity-20 px-2 py-1 rounded">{funcionariosAtivos} ativos</span>
+                            </div>
+                        </div>
+
+                        <div className="bg-gradient-to-r from-green-500 to-green-600 p-6 rounded-xl shadow-lg text-white">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-green-100 text-sm">Empresas</p>
+                                    <p className="text-4xl font-bold">{dados.empresas.length}</p>
+                                </div>
+                                <div className="w-14 h-14 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                                    <i className="fas fa-building text-2xl"></i>
+                                </div>
+                            </div>
+                            <div className="mt-4 text-green-100 text-sm">
+                                <i className="fas fa-check-circle mr-1"></i>Cadastradas
+                            </div>
+                        </div>
+
+                        <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-6 rounded-xl shadow-lg text-white">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-orange-100 text-sm">Holerites</p>
+                                    <p className="text-4xl font-bold">{totalHolerites}</p>
+                                </div>
+                                <div className="w-14 h-14 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                                    <i className="fas fa-file-invoice-dollar text-2xl"></i>
+                                </div>
+                            </div>
+                            <div className="mt-4 text-orange-100 text-sm">
+                                <i className="fas fa-calendar mr-1"></i>Cadastrados
+                            </div>
+                        </div>
+
+                        <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 rounded-xl shadow-lg text-white">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-purple-100 text-sm">Solicitações</p>
+                                    <p className="text-4xl font-bold">{solicitacoesPendentes}</p>
+                                </div>
+                                <div className="w-14 h-14 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                                    <i className="fas fa-clock text-2xl"></i>
+                                </div>
+                            </div>
+                            <div className="mt-4 text-purple-100 text-sm">
+                                <i className="fas fa-hourglass-half mr-1"></i>Pendentes
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Segunda linha de cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        {/* Status dos Funcionários */}
+                        <div className="bg-white p-6 rounded-xl shadow-lg">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                                <i className="fas fa-chart-pie text-primary-500 mr-2"></i>
+                                Status dos Funcionários
+                            </h3>
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                                    <div className="flex items-center">
+                                        <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                                        <span>Ativos</span>
+                                    </div>
+                                    <span className="font-bold text-green-600">{funcionariosAtivos}</span>
+                                </div>
+                                <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                                    <div className="flex items-center">
+                                        <div className="w-3 h-3 bg-yellow-500 rounded-full mr-3"></div>
+                                        <span>Férias</span>
+                                    </div>
+                                    <span className="font-bold text-yellow-600">{funcionariosFerias}</span>
+                                </div>
+                                <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                                    <div className="flex items-center">
+                                        <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
+                                        <span>Afastados</span>
+                                    </div>
+                                    <span className="font-bold text-red-600">{funcionariosAfastados}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Aniversários de Nascimento */}
+                        <div className="bg-white p-6 rounded-xl shadow-lg">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                                <i className="fas fa-gift text-purple-500 mr-2"></i>
+                                Aniversários (30 dias)
+                            </h3>
+                            {proximosAniversariosNascimento.length === 0 ? (
+                                <p className="text-gray-500 text-center py-4">Nenhum aniversário próximo</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {proximosAniversariosNascimento.map((f, i) => (
+                                        <div key={i} className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                                            <div>
+                                                <p className="font-medium text-sm">{f.nome}</p>
+                                                <p className="text-xs text-gray-500">{formatarData(f.dataNascimento)}</p>
+                                            </div>
+                                            <span className={`text-white text-xs px-2 py-1 rounded-full ${f.diasRestantes === 0 ? 'bg-green-500 animate-pulse' : 'bg-purple-500'}`}>
+                                                {f.diasRestantes === 0 ? '🎂 Hoje!' : `${f.diasRestantes} dias`}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Aniversários de Empresa */}
+                        <div className="bg-white p-6 rounded-xl shadow-lg">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                                <i className="fas fa-briefcase text-pink-500 mr-2"></i>
+                                Aniv. de Empresa (30 dias)
+                            </h3>
+                            {proximosAniversariosEmpresa.length === 0 ? (
+                                <p className="text-gray-500 text-center py-4">Nenhum aniversário próximo</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {proximosAniversariosEmpresa.map((f, i) => (
+                                        <div key={i} className="flex items-center justify-between p-3 bg-pink-50 rounded-lg">
+                                            <div>
+                                                <p className="font-medium text-sm">{f.nome}</p>
+                                                <p className="text-xs text-gray-500">{formatarData(f.dataAdmissao)}</p>
+                                            </div>
+                                            <span className="bg-pink-500 text-white text-xs px-2 py-1 rounded-full">
+                                                {f.diasRestantes === 0 ? 'Hoje!' : `${f.diasRestantes} dias`}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Ações Rápidas */}
+                        <div className="bg-white p-6 rounded-xl shadow-lg">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                                <i className="fas fa-bolt text-yellow-500 mr-2"></i>
+                                Ações Rápidas
+                            </h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => window.location.hash = 'funcionarios'} className="p-4 bg-primary-50 hover:bg-primary-100 rounded-lg text-center transition">
+                                    <i className="fas fa-user-plus text-primary-500 text-xl mb-2"></i>
+                                    <p className="text-sm font-medium text-primary-700">Novo Funcionário</p>
+                                </button>
+                                <button onClick={() => window.location.hash = 'empresas'} className="p-4 bg-green-50 hover:bg-green-100 rounded-lg text-center transition">
+                                    <i className="fas fa-building text-green-500 text-xl mb-2"></i>
+                                    <p className="text-sm font-medium text-green-700">Nova Empresa</p>
+                                </button>
+                                <button onClick={() => window.location.hash = 'rendimentos'} className="p-4 bg-orange-50 hover:bg-orange-100 rounded-lg text-center transition">
+                                    <i className="fas fa-file-invoice text-orange-500 text-xl mb-2"></i>
+                                    <p className="text-sm font-medium text-orange-700">Novo Holerite</p>
+                                </button>
+                                <button onClick={() => window.location.hash = 'avisos'} className="p-4 bg-purple-50 hover:bg-purple-100 rounded-lg text-center transition">
+                                    <i className="fas fa-bullhorn text-purple-500 text-xl mb-2"></i>
+                                    <p className="text-sm font-medium text-purple-700">Novo Aviso</p>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Últimos Cadastros */}
+                    {dados.funcionarios.length > 0 && (
+                        <div className="bg-white p-6 rounded-xl shadow-lg">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                                <i className="fas fa-history text-primary-500 mr-2"></i>
+                                Últimos Funcionários Cadastrados
+                            </h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="text-left text-gray-500 text-sm border-b">
+                                            <th className="pb-3">Nome</th>
+                                            <th className="pb-3">Cargo</th>
+                                            <th className="pb-3">Admissão</th>
+                                            <th className="pb-3">Vínculo</th>
+                                            <th className="pb-3">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {dados.funcionarios.slice(-5).reverse().map((func, i) => (
+                                            <tr key={i} className="border-b hover:bg-gray-50">
+                                                <td className="py-3 font-medium">{func.nome}</td>
+                                                <td className="py-3 text-gray-600">{func.cargo}</td>
+                                                <td className="py-3 text-gray-600">{formatarData(func.dataAdmissao)}</td>
+                                                <td className="py-3">
+                                                    <span className={`px-2 py-1 rounded text-xs ${func.tipoVinculo === 'CLT' ? 'bg-primary-100 text-primary-700' : 'bg-purple-100 text-purple-700'}`}>
+                                                        {func.tipoVinculo}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3">
+                                                    <span className={`px-2 py-1 rounded text-xs ${func.status === 'Ativo' ? 'bg-green-100 text-green-700' : func.status === 'Férias' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {func.status}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -528,7 +1007,7 @@
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-3xl font-bold">Gestão de Empresas</h2>
                         <button onClick={() => { setMostrarForm(true); setEmpresaEditando(null); }}
-                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                            className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600">
                             <i className="fas fa-plus mr-2"></i>Nova Empresa
                         </button>
                     </div>
@@ -555,7 +1034,7 @@
                                         <td className="p-4">{emp.cidade}/{emp.estado}</td>
                                         <td className="p-4">
                                             <div className="flex justify-center gap-2">
-                                                <button onClick={() => { setEmpresaEditando(emp); setMostrarForm(true); }} className="text-blue-600 hover:text-blue-800">
+                                                <button onClick={() => { setEmpresaEditando(emp); setMostrarForm(true); }} className="text-primary-500 hover:text-primary-700">
                                                     <i className="fas fa-edit"></i>
                                                 </button>
                                                 <button onClick={() => confirm('Excluir?') && atualizar('empresas', dados.empresas.filter(e => e.id !== emp.id))} className="text-red-600 hover:text-red-800">
@@ -630,7 +1109,7 @@
                             </div>
                         </div>
                         <div className="flex gap-4 mt-6">
-                            <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                            <button type="submit" className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600">
                                 <i className="fas fa-save mr-2"></i>Salvar
                             </button>
                             <button type="button" onClick={onCancelar} className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancelar</button>
@@ -724,7 +1203,7 @@
                                         {usuarioLogado.tipo === 'admin' && (
                                             <td className="p-4">
                                                 <div className="flex justify-center gap-2">
-                                                    <button onClick={() => { setFuncionarioEditando(func); setMostrarForm(true); }} className="text-blue-600 hover:text-blue-800">
+                                                    <button onClick={() => { setFuncionarioEditando(func); setMostrarForm(true); }} className="text-primary-500 hover:text-primary-700">
                                                         <i className="fas fa-edit"></i>
                                                     </button>
                                                     <button onClick={() => confirm('Excluir?') && atualizar('funcionarios', dados.funcionarios.filter(f => f.id !== func.id))} className="text-red-600 hover:text-red-800">
@@ -746,10 +1225,26 @@
         function FormFuncionario({ funcionario, empresas, onSalvar, onCancelar }) {
             const [formData, setFormData] = useState(funcionario || {
                 nome: '', cbo: '', cpf: '', rg: '', endereco: '', bairro: '', cidade: '', estado: '', pais: 'Brasil',
-                ctps: '', pis: '', dataAdmissao: '', cargo: '', salarioBase: '', empresaId: '', tipoVinculo: 'CLT',
-                status: 'Ativo', departamento: '', email: '', telefone: ''
+                ctps: '', pis: '', dataAdmissao: '', dataNascimento: '', cargo: '', salarioBase: '', empresaId: '', tipoVinculo: 'CLT',
+                status: 'Ativo', departamento: '', email: '', telefone: '', foto: ''
             });
             const [erros, setErros] = useState({});
+            const fotoInputRef = useRef(null);
+
+            const handleFotoUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    if (file.size > 2 * 1024 * 1024) {
+                        alert('A foto deve ter no máximo 2MB');
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setFormData({...formData, foto: reader.result});
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
 
             const handleSubmit = (e) => {
                 e.preventDefault();
@@ -770,6 +1265,45 @@
                 <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
                     <h3 className="text-xl font-bold mb-4">{funcionario ? 'Editar' : 'Novo'} Funcionário</h3>
                     <form onSubmit={handleSubmit}>
+                        {/* Seção de Foto */}
+                        <div className="flex justify-center mb-6">
+                            <div className="text-center">
+                                <div className="relative inline-block">
+                                    <div className="w-32 h-32 rounded-full border-4 border-primary-200 overflow-hidden bg-gray-100 flex items-center justify-center">
+                                        {formData.foto ? (
+                                            <img src={formData.foto} alt="Foto" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <i className="fas fa-user text-4xl text-gray-300"></i>
+                                        )}
+                                    </div>
+                                    <button 
+                                        type="button"
+                                        onClick={() => fotoInputRef.current?.click()}
+                                        className="absolute bottom-0 right-0 w-10 h-10 bg-primary-500 text-white rounded-full flex items-center justify-center hover:bg-primary-600 shadow-lg"
+                                    >
+                                        <i className="fas fa-camera"></i>
+                                    </button>
+                                </div>
+                                <input 
+                                    type="file" 
+                                    ref={fotoInputRef} 
+                                    onChange={handleFotoUpload} 
+                                    accept="image/*" 
+                                    className="hidden" 
+                                />
+                                <p className="text-sm text-gray-500 mt-2">Clique para adicionar foto</p>
+                                {formData.foto && (
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setFormData({...formData, foto: ''})}
+                                        className="text-red-500 text-sm mt-1 hover:underline"
+                                    >
+                                        <i className="fas fa-trash mr-1"></i>Remover foto
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <div className="lg:col-span-3">
                                 <label className="block mb-2 font-medium">Nome Completo *</label>
@@ -784,6 +1318,10 @@
                             <div>
                                 <label className="block mb-2 font-medium">RG</label>
                                 <input type="text" value={formData.rg} onChange={(e) => setFormData({...formData, rg: e.target.value})} className="w-full px-4 py-2 border rounded-lg" />
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Data de Nascimento</label>
+                                <input type="date" value={formData.dataNascimento} onChange={(e) => setFormData({...formData, dataNascimento: e.target.value})} className="w-full px-4 py-2 border rounded-lg" />
                             </div>
                             <div>
                                 <label className="block mb-2 font-medium">CBO</label>
@@ -821,7 +1359,7 @@
                             </div>
                             <div>
                                 <label className="block mb-2 font-medium">Salário Base</label>
-                                <input type="number" step="0.01" value={formData.salarioBase} onChange={(e) => setFormData({...formData, salarioBase: e.target.value})} className="w-full px-4 py-2 border rounded-lg" />
+                                <InputMoeda value={formData.salarioBase} onChange={(valor) => setFormData({...formData, salarioBase: valor})} className="w-full px-4 py-2 border rounded-lg" />
                             </div>
                             <div>
                                 <label className="block mb-2 font-medium">CTPS</label>
@@ -925,7 +1463,7 @@
                             </div>
                             {usuarioLogado.tipo === 'admin' && funcionarioSelecionado && (
                                 <div className="flex items-end">
-                                    <button onClick={() => setMostrarForm(true)} className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                                    <button onClick={() => setMostrarForm(true)} className="w-full bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600">
                                         {holeriteFiltrado ? 'Editar' : 'Cadastrar'} Holerite
                                     </button>
                                 </div>
@@ -958,6 +1496,83 @@
                         <div className="bg-white p-8 rounded-lg shadow-lg text-center text-gray-500">
                             <i className="fas fa-file-invoice-dollar text-6xl mb-4"></i>
                             <p>Selecione um funcionário e período para visualizar o holerite</p>
+                        </div>
+                    )}
+
+                    {/* Lista de todos os holerites cadastrados */}
+                    {dados.holerites.length > 0 && (
+                        <div className="bg-white p-6 rounded-lg shadow-lg mt-6">
+                            <h3 className="text-xl font-bold mb-4 flex items-center">
+                                <i className="fas fa-list text-primary-500 mr-2"></i>
+                                Todos os Holerites Cadastrados
+                            </h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="text-left p-3">Funcionário</th>
+                                            <th className="text-left p-3">Mês/Ano</th>
+                                            <th className="text-right p-3">Total Proventos</th>
+                                            <th className="text-right p-3">Total Descontos</th>
+                                            <th className="text-right p-3">Líquido</th>
+                                            <th className="text-center p-3">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {dados.holerites
+                                            .filter(h => usuarioLogado.tipo === 'admin' || h.funcionarioId === usuarioLogado.id)
+                                            .sort((a, b) => {
+                                                if (b.ano !== a.ano) return b.ano - a.ano;
+                                                return b.mes - a.mes;
+                                            })
+                                            .map(h => {
+                                                const func = dados.funcionarios.find(f => f.id === h.funcionarioId);
+                                                const nomeMes = new Date(2000, h.mes - 1, 1).toLocaleString('pt-BR', { month: 'long' });
+                                                return (
+                                                    <tr key={h.id} className="border-b hover:bg-gray-50">
+                                                        <td className="p-3">{func?.nome || '-'}</td>
+                                                        <td className="p-3 capitalize">{nomeMes} / {h.ano}</td>
+                                                        <td className="p-3 text-right text-green-600 font-medium">
+                                                            {formatarMoeda(h.totalProventos || 0)}
+                                                        </td>
+                                                        <td className="p-3 text-right text-red-600 font-medium">
+                                                            {formatarMoeda(h.totalDescontos || 0)}
+                                                        </td>
+                                                        <td className="p-3 text-right font-bold text-primary-600">
+                                                            {formatarMoeda(h.salarioLiquido || 0)}
+                                                        </td>
+                                                        <td className="p-3 text-center">
+                                                            <button 
+                                                                onClick={() => {
+                                                                    setFuncionarioSelecionado(h.funcionarioId.toString());
+                                                                    setMes(h.mes);
+                                                                    setAno(h.ano);
+                                                                }} 
+                                                                className="text-primary-600 hover:text-primary-800 mr-2"
+                                                                title="Visualizar"
+                                                            >
+                                                                <i className="fas fa-eye"></i>
+                                                            </button>
+                                                            {usuarioLogado.tipo === 'admin' && (
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        if (confirm('Tem certeza que deseja excluir este holerite?')) {
+                                                                            atualizar('holerites', dados.holerites.filter(hol => hol.id !== h.id));
+                                                                        }
+                                                                    }} 
+                                                                    className="text-red-600 hover:text-red-800"
+                                                                    title="Excluir"
+                                                                >
+                                                                    <i className="fas fa-trash"></i>
+                                                                </button>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -1019,27 +1634,27 @@
                             </div>
                             <div>
                                 <label className="block mb-2 font-medium">Salário Mensalista</label>
-                                <input type="number" step="0.01" value={formData.salarioMensalista} 
-                                    onChange={(e) => setFormData({...formData, salarioMensalista: e.target.value})}
-                                    className="w-full px-4 py-2 border rounded-lg" placeholder="0.00" />
+                                <InputMoeda value={formData.salarioMensalista} 
+                                    onChange={(valor) => setFormData({...formData, salarioMensalista: valor})}
+                                    className="w-full px-4 py-2 border rounded-lg" />
                             </div>
                             <div>
                                 <label className="block mb-2 font-medium">Auxílio Combustível</label>
-                                <input type="number" step="0.01" value={formData.auxilioCombustivel}
-                                    onChange={(e) => setFormData({...formData, auxilioCombustivel: e.target.value})}
-                                    className="w-full px-4 py-2 border rounded-lg" placeholder="0.00" />
+                                <InputMoeda value={formData.auxilioCombustivel}
+                                    onChange={(valor) => setFormData({...formData, auxilioCombustivel: valor})}
+                                    className="w-full px-4 py-2 border rounded-lg" />
                             </div>
                             <div>
                                 <label className="block mb-2 font-medium">Prêmio Motivacional</label>
-                                <input type="number" step="0.01" value={formData.premioMotivacional}
-                                    onChange={(e) => setFormData({...formData, premioMotivacional: e.target.value})}
-                                    className="w-full px-4 py-2 border rounded-lg" placeholder="0.00" />
+                                <InputMoeda value={formData.premioMotivacional}
+                                    onChange={(valor) => setFormData({...formData, premioMotivacional: valor})}
+                                    className="w-full px-4 py-2 border rounded-lg" />
                             </div>
                             <div>
                                 <label className="block mb-2 font-medium">Arredondamento Provento Folha</label>
-                                <input type="number" step="0.01" value={formData.arredondamentoProvento}
-                                    onChange={(e) => setFormData({...formData, arredondamentoProvento: e.target.value})}
-                                    className="w-full px-4 py-2 border rounded-lg" placeholder="0.00" />
+                                <InputMoeda value={formData.arredondamentoProvento}
+                                    onChange={(valor) => setFormData({...formData, arredondamentoProvento: valor})}
+                                    className="w-full px-4 py-2 border rounded-lg" />
                             </div>
 
                             <div className="lg:col-span-3 mt-4">
@@ -1047,15 +1662,15 @@
                             </div>
                             <div>
                                 <label className="block mb-2 font-medium">INSS</label>
-                                <input type="number" step="0.01" value={formData.inss}
-                                    onChange={(e) => setFormData({...formData, inss: e.target.value})}
-                                    className="w-full px-4 py-2 border rounded-lg" placeholder="0.00" />
+                                <InputMoeda value={formData.inss}
+                                    onChange={(valor) => setFormData({...formData, inss: valor})}
+                                    className="w-full px-4 py-2 border rounded-lg" />
                             </div>
                             <div>
                                 <label className="block mb-2 font-medium">IR</label>
-                                <input type="number" step="0.01" value={formData.ir}
-                                    onChange={(e) => setFormData({...formData, ir: e.target.value})}
-                                    className="w-full px-4 py-2 border rounded-lg" placeholder="0.00" />
+                                <InputMoeda value={formData.ir}
+                                    onChange={(valor) => setFormData({...formData, ir: valor})}
+                                    className="w-full px-4 py-2 border rounded-lg" />
                             </div>
 
                             <div className="lg:col-span-3 mt-4">
@@ -1070,7 +1685,7 @@
                         </div>
 
                         <div className="flex gap-4">
-                            <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                            <button type="submit" className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600">
                                 <i className="fas fa-save mr-2"></i>Salvar Holerite
                             </button>
                             <button type="button" onClick={onCancelar} className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancelar</button>
@@ -1183,9 +1798,9 @@
                     </div>
 
                     <div className="border-t-2 pt-4">
-                        <div className="flex justify-between items-center p-4 bg-blue-50 rounded">
+                        <div className="flex justify-between items-center p-4 bg-primary-50 rounded">
                             <span className="text-xl font-bold">SALÁRIO LÍQUIDO</span>
-                            <span className="text-3xl font-bold text-blue-700">{formatarMoeda(holerite.salarioLiquido)}</span>
+                            <span className="text-3xl font-bold text-primary-600">{formatarMoeda(holerite.salarioLiquido)}</span>
                         </div>
                     </div>
 
@@ -1195,7 +1810,7 @@
                                 <i className="fas fa-download mr-2"></i>Baixar Holerite
                             </button>
                         )}
-                        <button onClick={() => window.print()} className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                        <button onClick={() => window.print()} className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600">
                             <i className="fas fa-print mr-2"></i>Imprimir
                         </button>
                     </div>
@@ -1330,7 +1945,7 @@
                                     <button onClick={gerarPDF} className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">
                                         <i className="fas fa-file-pdf mr-2"></i>Gerar PDF
                                     </button>
-                                    <button onClick={() => setMostrarForm(true)} className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                                    <button onClick={() => setMostrarForm(true)} className="flex-1 bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600">
                                         <i className="fas fa-plus mr-2"></i>Novo
                                     </button>
                                 </div>
@@ -1364,7 +1979,7 @@
                                     <button onClick={() => registrarPonto('Saída Intervalo')} className="bg-yellow-600 text-white px-6 py-4 rounded-lg hover:bg-yellow-700">
                                         <i className="fas fa-utensils text-2xl mb-2 block"></i>Saída Intervalo
                                     </button>
-                                    <button onClick={() => registrarPonto('Retorno Intervalo')} className="bg-blue-600 text-white px-6 py-4 rounded-lg hover:bg-blue-700">
+                                    <button onClick={() => registrarPonto('Retorno Intervalo')} className="bg-primary-500 text-white px-6 py-4 rounded-lg hover:bg-primary-600">
                                         <i className="fas fa-undo text-2xl mb-2 block"></i>Retorno
                                     </button>
                                     <button onClick={() => registrarPonto('Saída')} className="bg-red-600 text-white px-6 py-4 rounded-lg hover:bg-red-700">
@@ -1441,7 +2056,7 @@
                                                     {usuarioLogado.tipo === 'admin' && <td className="p-3">{dados.funcionarios.find(f => f.id === reg.funcionarioId)?.nome}</td>}
                                                     {usuarioLogado.tipo === 'admin' && (
                                                         <td className="p-3 text-center">
-                                                            <button onClick={() => setEditando(reg)} className="text-blue-600 hover:text-blue-800 mr-2"><i className="fas fa-edit"></i></button>
+                                                            <button onClick={() => setEditando(reg)} className="text-primary-500 hover:text-primary-700 mr-2"><i className="fas fa-edit"></i></button>
                                                             <button onClick={() => excluirRegistro(reg.id)} className="text-red-600 hover:text-red-800"><i className="fas fa-trash"></i></button>
                                                         </td>
                                                     )}
@@ -1506,7 +2121,7 @@
                             </div>
                         </div>
                         <div className="flex gap-4 mt-6">
-                            <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                            <button type="submit" className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600">
                                 <i className="fas fa-save mr-2"></i>Salvar
                             </button>
                             <button type="button" onClick={onCancelar} className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancelar</button>
@@ -1517,42 +2132,142 @@
         }
 
         // Continua próximo bloco...
-        // FÉRIAS - Com solicitações e aprovações
+        // FÉRIAS - Com solicitações, aprovações, histórico e fluxo de modificação
         function Ferias({ dados, atualizar, usuarioLogado }) {
             const [mostrarForm, setMostrarForm] = useState(false);
+            const [mostrarFormHistorico, setMostrarFormHistorico] = useState(false);
+            const [mostrarModalModificar, setMostrarModalModificar] = useState(false);
+            const [solicitacaoModificar, setSolicitacaoModificar] = useState(null);
+            const [abaAtiva, setAbaAtiva] = useState('solicitacoes');
 
             const solicitarFerias = (solicitacao) => {
-                atualizar('solicitacoesFerias', [...dados.solicitacoesFerias, { ...solicitacao, id: Date.now(), status: 'Pendente' }]);
+                atualizar('solicitacoesFerias', [...dados.solicitacoesFerias, { 
+                    ...solicitacao, 
+                    id: Date.now(), 
+                    status: 'Pendente',
+                    dataSolicitacao: new Date().toISOString()
+                }]);
                 setMostrarForm(false);
             };
 
+            const salvarHistorico = (registro) => {
+                const historico = dados.historicoFerias || [];
+                atualizar('historicoFerias', [...historico, { ...registro, id: Date.now() }]);
+                setMostrarFormHistorico(false);
+            };
+
             const aprovarRejeitar = (id, novoStatus) => {
+                const solicitacaoAtual = dados.solicitacoesFerias.find(s => s.id === id);
                 atualizar('solicitacoesFerias', dados.solicitacoesFerias.map(s => s.id === id ? {...s, status: novoStatus} : s));
+                
+                // Se aprovado, adicionar ao histórico automaticamente
+                if (novoStatus === 'Aprovado' && solicitacaoAtual) {
+                    const historico = dados.historicoFerias || [];
+                    atualizar('historicoFerias', [...historico, {
+                        id: Date.now(),
+                        funcionarioId: solicitacaoAtual.funcionarioId,
+                        dataInicio: solicitacaoAtual.dataInicio,
+                        dataFim: solicitacaoAtual.dataFim,
+                        periodo: solicitacaoAtual.periodo,
+                        formaPagamento: solicitacaoAtual.formaPagamento,
+                        observacao: 'Aprovado via solicitação',
+                        dataRegistro: new Date().toISOString()
+                    }]);
+                }
+            };
+
+            const abrirModalModificar = (solicitacao) => {
+                setSolicitacaoModificar({ ...solicitacao });
+                setMostrarModalModificar(true);
+            };
+
+            const enviarModificacao = () => {
+                if (solicitacaoModificar) {
+                    atualizar('solicitacoesFerias', dados.solicitacoesFerias.map(s => 
+                        s.id === solicitacaoModificar.id 
+                            ? {...solicitacaoModificar, status: 'Aguardando Aceite', dataModificacao: new Date().toISOString()} 
+                            : s
+                    ));
+                    setMostrarModalModificar(false);
+                    setSolicitacaoModificar(null);
+                }
+            };
+
+            const aceitarModificacao = (id) => {
+                const solicitacaoAtual = dados.solicitacoesFerias.find(s => s.id === id);
+                atualizar('solicitacoesFerias', dados.solicitacoesFerias.map(s => s.id === id ? {...s, status: 'Aprovado', aceiteEm: new Date().toISOString()} : s));
+                
+                // Adicionar ao histórico
+                if (solicitacaoAtual) {
+                    const historico = dados.historicoFerias || [];
+                    atualizar('historicoFerias', [...historico, {
+                        id: Date.now(),
+                        funcionarioId: solicitacaoAtual.funcionarioId,
+                        dataInicio: solicitacaoAtual.dataInicio,
+                        dataFim: solicitacaoAtual.dataFim,
+                        periodo: solicitacaoAtual.periodo,
+                        formaPagamento: solicitacaoAtual.formaPagamento,
+                        observacao: 'Datas modificadas pelo admin e aceitas',
+                        dataRegistro: new Date().toISOString()
+                    }]);
+                }
+            };
+
+            const rejeitarModificacao = (id) => {
+                atualizar('solicitacoesFerias', dados.solicitacoesFerias.map(s => s.id === id ? {...s, status: 'Pendente', dataModificacao: null} : s));
             };
 
             const minhasSolicitacoes = dados.solicitacoesFerias.filter(s => s.funcionarioId === usuarioLogado.id);
             const todasSolicitacoes = dados.solicitacoesFerias;
+            const historicoFerias = dados.historicoFerias || [];
 
             const meusDados = dados.funcionarios.find(f => f.id === usuarioLogado.id);
             const feriasInfo = meusDados ? calcularDiasFerias(meusDados.dataAdmissao) : null;
 
+            // Calcular férias já tiradas
+            const meuHistorico = historicoFerias.filter(h => h.funcionarioId === usuarioLogado.id);
+            const diasUsados = meuHistorico.reduce((acc, h) => {
+                const inicio = new Date(h.dataInicio);
+                const fim = new Date(h.dataFim);
+                const dias = Math.ceil((fim - inicio) / (1000 * 60 * 60 * 24)) + 1;
+                return acc + dias;
+            }, 0);
+
             return (
                 <div>
-                    <h2 className="text-3xl font-bold mb-6">Gestão de Férias</h2>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-3xl font-bold">Gestão de Férias</h2>
+                        <div className="flex gap-2">
+                            {usuarioLogado.tipo !== 'admin' && (
+                                <button onClick={() => setMostrarForm(true)} className="bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600">
+                                    <i className="fas fa-plus mr-2"></i>Nova Solicitação
+                                </button>
+                            )}
+                            {usuarioLogado.tipo === 'admin' && (
+                                <button onClick={() => setMostrarFormHistorico(true)} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">
+                                    <i className="fas fa-history mr-2"></i>Registrar Histórico
+                                </button>
+                            )}
+                        </div>
+                    </div>
 
                     {usuarioLogado.tipo !== 'admin' && feriasInfo && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                            <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
-                                <p className="text-gray-600 mb-2">Próximo Vencimento</p>
-                                <p className="text-2xl font-bold text-gray-800">{formatarData(feriasInfo.dataVencimento)}</p>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div className="bg-white p-4 rounded-lg shadow-lg border-l-4 border-primary-500">
+                                <p className="text-gray-600 text-sm">Próximo Vencimento</p>
+                                <p className="text-xl font-bold text-gray-800">{formatarData(feriasInfo.dataVencimento)}</p>
                             </div>
-                            <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-green-500">
-                                <p className="text-gray-600 mb-2">Meses Restantes</p>
-                                <p className="text-2xl font-bold text-gray-800">{feriasInfo.mesesRestantes} meses</p>
+                            <div className="bg-white p-4 rounded-lg shadow-lg border-l-4 border-green-500">
+                                <p className="text-gray-600 text-sm">Meses Restantes</p>
+                                <p className="text-xl font-bold text-gray-800">{feriasInfo.mesesRestantes} meses</p>
                             </div>
-                            <div className="bg-white p-6 rounded-lg shadow-lg border-l-4 border-purple-500">
-                                <p className="text-gray-600 mb-2">Dias de Férias</p>
-                                <p className="text-2xl font-bold text-gray-800">30 dias</p>
+                            <div className="bg-white p-4 rounded-lg shadow-lg border-l-4 border-purple-500">
+                                <p className="text-gray-600 text-sm">Direito Total</p>
+                                <p className="text-xl font-bold text-gray-800">30 dias</p>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg shadow-lg border-l-4 border-orange-500">
+                                <p className="text-gray-600 text-sm">Dias Usados</p>
+                                <p className="text-xl font-bold text-gray-800">{diasUsados} dias</p>
                             </div>
                         </div>
                     )}
@@ -1567,71 +2282,211 @@
                         </div>
                     </div>
 
-                    {usuarioLogado.tipo !== 'admin' && (
-                        <button onClick={() => setMostrarForm(true)} className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 mb-6">
-                            <i className="fas fa-plus mr-2"></i>Nova Solicitação
-                        </button>
-                    )}
-
                     {mostrarForm && (
                         <FormFerias funcionarioId={usuarioLogado.id} onSalvar={solicitarFerias} onCancelar={() => setMostrarForm(false)} />
                     )}
 
-                    <div className="bg-white p-6 rounded-lg shadow-lg">
-                        <h3 className="text-xl font-bold mb-4">{usuarioLogado.tipo === 'admin' ? 'Todas as Solicitações' : 'Minhas Solicitações'}</h3>
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gray-50"><tr>
-                                    {usuarioLogado.tipo === 'admin' && <th className="text-left p-3">Funcionário</th>}
-                                    <th className="text-left p-3">Período</th>
-                                    <th className="text-left p-3">Data Início</th>
-                                    <th className="text-left p-3">Data Fim</th>
-                                    <th className="text-left p-3">Status</th>
-                                    {usuarioLogado.tipo === 'admin' && <th className="text-center p-3">Ações</th>}
-                                </tr></thead>
-                                <tbody>
-                                    {(usuarioLogado.tipo === 'admin' ? todasSolicitacoes : minhasSolicitacoes).map(sol => {
-                                        const func = dados.funcionarios.find(f => f.id === sol.funcionarioId);
-                                        return (
-                                            <tr key={sol.id} className="border-b hover:bg-gray-50">
-                                                {usuarioLogado.tipo === 'admin' && <td className="p-3">{func?.nome}</td>}
-                                                <td className="p-3">{sol.periodo}</td>
-                                                <td className="p-3">{formatarData(sol.dataInicio)}</td>
-                                                <td className="p-3">{formatarData(sol.dataFim)}</td>
-                                                <td className="p-3">
-                                                    <span className={`px-2 py-1 rounded text-xs ${
-                                                        sol.status === 'Aprovado' ? 'bg-green-100 text-green-800' :
-                                                        sol.status === 'Rejeitado' ? 'bg-red-100 text-red-800' :
-                                                        'bg-yellow-100 text-yellow-800'
-                                                    }`}>{sol.status}</span>
-                                                </td>
-                                                {usuarioLogado.tipo === 'admin' && sol.status === 'Pendente' && (
-                                                    <td className="p-3 text-center">
-                                                        <button onClick={() => aprovarRejeitar(sol.id, 'Aprovado')} className="text-green-600 hover:text-green-800 mr-2">
-                                                            <i className="fas fa-check"></i>
-                                                        </button>
-                                                        <button onClick={() => aprovarRejeitar(sol.id, 'Rejeitado')} className="text-red-600 hover:text-red-800">
-                                                            <i className="fas fa-times"></i>
-                                                        </button>
-                                                    </td>
-                                                )}
-                                                {usuarioLogado.tipo === 'admin' && sol.status !== 'Pendente' && <td className="p-3 text-center">-</td>}
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                    {mostrarFormHistorico && (
+                        <FormHistoricoFerias funcionarios={dados.funcionarios} onSalvar={salvarHistorico} onCancelar={() => setMostrarFormHistorico(false)} />
+                    )}
+
+                    {/* Modal Modificar Datas */}
+                    {mostrarModalModificar && solicitacaoModificar && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4">
+                                <h3 className="text-xl font-bold mb-4">Modificar Datas da Solicitação</h3>
+                                <p className="text-gray-600 mb-4">As novas datas serão enviadas ao funcionário para aceite.</p>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block mb-2 font-medium">Nova Data Início</label>
+                                        <input type="date" value={solicitacaoModificar.dataInicio} 
+                                            onChange={(e) => setSolicitacaoModificar({...solicitacaoModificar, dataInicio: e.target.value})} 
+                                            className="w-full px-4 py-2 border rounded-lg" />
+                                    </div>
+                                    <div>
+                                        <label className="block mb-2 font-medium">Nova Data Fim</label>
+                                        <input type="date" value={solicitacaoModificar.dataFim} 
+                                            onChange={(e) => setSolicitacaoModificar({...solicitacaoModificar, dataFim: e.target.value})} 
+                                            className="w-full px-4 py-2 border rounded-lg" />
+                                    </div>
+                                    <div>
+                                        <label className="block mb-2 font-medium">Motivo da Alteração</label>
+                                        <textarea 
+                                            value={solicitacaoModificar.motivoAlteracao || ''} 
+                                            onChange={(e) => setSolicitacaoModificar({...solicitacaoModificar, motivoAlteracao: e.target.value})} 
+                                            className="w-full px-4 py-2 border rounded-lg" 
+                                            rows="3"
+                                            placeholder="Explique o motivo da alteração..."
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex gap-4 mt-6">
+                                    <button onClick={enviarModificacao} className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600">
+                                        <i className="fas fa-paper-plane mr-2"></i>Enviar para Aceite
+                                    </button>
+                                    <button onClick={() => { setMostrarModalModificar(false); setSolicitacaoModificar(null); }} 
+                                        className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancelar</button>
+                                </div>
+                            </div>
                         </div>
+                    )}
+
+                    {/* Abas */}
+                    <div className="flex gap-2 mb-4">
+                        <button 
+                            onClick={() => setAbaAtiva('solicitacoes')} 
+                            className={`px-4 py-2 rounded-lg font-medium ${abaAtiva === 'solicitacoes' ? 'bg-primary-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                        >
+                            <i className="fas fa-clipboard-list mr-2"></i>Solicitações
+                        </button>
+                        <button 
+                            onClick={() => setAbaAtiva('historico')} 
+                            className={`px-4 py-2 rounded-lg font-medium ${abaAtiva === 'historico' ? 'bg-primary-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                        >
+                            <i className="fas fa-history mr-2"></i>Histórico de Férias
+                        </button>
                     </div>
+
+                    {/* Aba Solicitações */}
+                    {abaAtiva === 'solicitacoes' && (
+                        <div className="bg-white p-6 rounded-lg shadow-lg">
+                            <h3 className="text-xl font-bold mb-4">{usuarioLogado.tipo === 'admin' ? 'Todas as Solicitações' : 'Minhas Solicitações'}</h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-gray-50"><tr>
+                                        {usuarioLogado.tipo === 'admin' && <th className="text-left p-3">Funcionário</th>}
+                                        <th className="text-left p-3">Período</th>
+                                        <th className="text-left p-3">Data Início</th>
+                                        <th className="text-left p-3">Data Fim</th>
+                                        <th className="text-left p-3">Pagamento</th>
+                                        <th className="text-left p-3">Status</th>
+                                        <th className="text-center p-3">Ações</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        {(usuarioLogado.tipo === 'admin' ? todasSolicitacoes : minhasSolicitacoes).map(sol => {
+                                            const func = dados.funcionarios.find(f => f.id === sol.funcionarioId);
+                                            return (
+                                                <tr key={sol.id} className="border-b hover:bg-gray-50">
+                                                    {usuarioLogado.tipo === 'admin' && <td className="p-3">{func?.nome}</td>}
+                                                    <td className="p-3">{sol.periodo}</td>
+                                                    <td className="p-3">{formatarData(sol.dataInicio)}</td>
+                                                    <td className="p-3">{formatarData(sol.dataFim)}</td>
+                                                    <td className="p-3">
+                                                        <span className="text-xs">{sol.formaPagamento || 'Não informado'}</span>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <span className={`px-2 py-1 rounded text-xs ${
+                                                            sol.status === 'Aprovado' ? 'bg-green-100 text-green-800' :
+                                                            sol.status === 'Rejeitado' ? 'bg-red-100 text-red-800' :
+                                                            sol.status === 'Aguardando Aceite' ? 'bg-blue-100 text-blue-800' :
+                                                            'bg-yellow-100 text-yellow-800'
+                                                        }`}>{sol.status}</span>
+                                                        {sol.motivoAlteracao && sol.status === 'Aguardando Aceite' && (
+                                                            <p className="text-xs text-gray-500 mt-1">Motivo: {sol.motivoAlteracao}</p>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-3 text-center">
+                                                        {/* Ações do Admin */}
+                                                        {usuarioLogado.tipo === 'admin' && sol.status === 'Pendente' && (
+                                                            <div className="flex justify-center gap-1">
+                                                                <button onClick={() => aprovarRejeitar(sol.id, 'Aprovado')} className="text-green-600 hover:text-green-800 p-1" title="Aprovar">
+                                                                    <i className="fas fa-check"></i>
+                                                                </button>
+                                                                <button onClick={() => abrirModalModificar(sol)} className="text-blue-600 hover:text-blue-800 p-1" title="Modificar Datas">
+                                                                    <i className="fas fa-edit"></i>
+                                                                </button>
+                                                                <button onClick={() => aprovarRejeitar(sol.id, 'Rejeitado')} className="text-red-600 hover:text-red-800 p-1" title="Rejeitar">
+                                                                    <i className="fas fa-times"></i>
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        {/* Ações do Funcionário quando admin modifica */}
+                                                        {usuarioLogado.tipo !== 'admin' && sol.status === 'Aguardando Aceite' && (
+                                                            <div className="flex justify-center gap-1">
+                                                                <button onClick={() => aceitarModificacao(sol.id)} className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600">
+                                                                    <i className="fas fa-check mr-1"></i>Aceitar
+                                                                </button>
+                                                                <button onClick={() => rejeitarModificacao(sol.id)} className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">
+                                                                    <i className="fas fa-times mr-1"></i>Recusar
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        {(sol.status === 'Aprovado' || sol.status === 'Rejeitado') && '-'}
+                                                        {usuarioLogado.tipo === 'admin' && sol.status === 'Aguardando Aceite' && (
+                                                            <span className="text-xs text-blue-600">Aguardando funcionário</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {(usuarioLogado.tipo === 'admin' ? todasSolicitacoes : minhasSolicitacoes).length === 0 && (
+                                            <tr><td colSpan="7" className="p-4 text-center text-gray-500">Nenhuma solicitação encontrada</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Aba Histórico */}
+                    {abaAtiva === 'historico' && (
+                        <div className="bg-white p-6 rounded-lg shadow-lg">
+                            <h3 className="text-xl font-bold mb-4">Histórico de Férias</h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-gray-50"><tr>
+                                        {usuarioLogado.tipo === 'admin' && <th className="text-left p-3">Funcionário</th>}
+                                        <th className="text-left p-3">Período</th>
+                                        <th className="text-left p-3">Data Início</th>
+                                        <th className="text-left p-3">Data Fim</th>
+                                        <th className="text-left p-3">Dias</th>
+                                        <th className="text-left p-3">Pagamento</th>
+                                        <th className="text-left p-3">Observação</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        {(usuarioLogado.tipo === 'admin' ? historicoFerias : meuHistorico).map(h => {
+                                            const func = dados.funcionarios.find(f => f.id === h.funcionarioId);
+                                            const inicio = new Date(h.dataInicio);
+                                            const fim = new Date(h.dataFim);
+                                            const dias = Math.ceil((fim - inicio) / (1000 * 60 * 60 * 24)) + 1;
+                                            return (
+                                                <tr key={h.id} className="border-b hover:bg-gray-50">
+                                                    {usuarioLogado.tipo === 'admin' && <td className="p-3">{func?.nome}</td>}
+                                                    <td className="p-3">{h.periodo || '-'}</td>
+                                                    <td className="p-3">{formatarData(h.dataInicio)}</td>
+                                                    <td className="p-3">{formatarData(h.dataFim)}</td>
+                                                    <td className="p-3"><span className="bg-primary-100 text-primary-700 px-2 py-1 rounded text-xs">{dias} dias</span></td>
+                                                    <td className="p-3 text-xs">{h.formaPagamento || '-'}</td>
+                                                    <td className="p-3 text-sm text-gray-600">{h.observacao || '-'}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {(usuarioLogado.tipo === 'admin' ? historicoFerias : meuHistorico).length === 0 && (
+                                            <tr><td colSpan="7" className="p-4 text-center text-gray-500">Nenhum histórico encontrado</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
 
+        // Formulário de Solicitação de Férias
         function FormFerias({ funcionarioId, onSalvar, onCancelar }) {
-            const [formData, setFormData] = useState({ funcionarioId, periodo: '15 dias (livre escolha)', dataInicio: '', dataFim: '', observacao: '' });
+            const [formData, setFormData] = useState({ 
+                funcionarioId, 
+                periodo: '15 dias (livre escolha)', 
+                dataInicio: '', 
+                dataFim: '', 
+                observacao: '',
+                formaPagamento: 'integral_primeira'
+            });
+
             return (
                 <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
-                    <h3 className="text-xl font-bold mb-4">Solicit ar Férias</h3>
+                    <h3 className="text-xl font-bold mb-4">Solicitar Férias</h3>
                     <form onSubmit={(e) => { e.preventDefault(); onSalvar(formData); }}>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
@@ -1653,9 +2508,120 @@
                                 <label className="block mb-2 font-medium">Observação</label>
                                 <input type="text" value={formData.observacao} onChange={(e) => setFormData({...formData, observacao: e.target.value})} className="w-full px-4 py-2 border rounded-lg" />
                             </div>
+                            <div className="md:col-span-2">
+                                <label className="block mb-2 font-medium">Forma de Recebimento das Férias</label>
+                                <div className="space-y-2">
+                                    <label className="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input 
+                                            type="radio" 
+                                            name="formaPagamento" 
+                                            value="integral_primeira" 
+                                            checked={formData.formaPagamento === 'integral_primeira'}
+                                            onChange={(e) => setFormData({...formData, formaPagamento: e.target.value})}
+                                            className="mr-3"
+                                        />
+                                        <div>
+                                            <p className="font-medium">Integral na 1ª Quinzena de Férias</p>
+                                            <p className="text-sm text-gray-500">Receber o valor total das férias na primeira quinzena das férias</p>
+                                        </div>
+                                    </label>
+                                    <label className="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input 
+                                            type="radio" 
+                                            name="formaPagamento" 
+                                            value="integral_segunda" 
+                                            checked={formData.formaPagamento === 'integral_segunda'}
+                                            onChange={(e) => setFormData({...formData, formaPagamento: e.target.value})}
+                                            className="mr-3"
+                                        />
+                                        <div>
+                                            <p className="font-medium">Integral na 2ª Quinzena de Férias</p>
+                                            <p className="text-sm text-gray-500">Receber o valor total das férias na segunda quinzena das férias</p>
+                                        </div>
+                                    </label>
+                                    <label className="flex items-center p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input 
+                                            type="radio" 
+                                            name="formaPagamento" 
+                                            value="dividido" 
+                                            checked={formData.formaPagamento === 'dividido'}
+                                            onChange={(e) => setFormData({...formData, formaPagamento: e.target.value})}
+                                            className="mr-3"
+                                        />
+                                        <div>
+                                            <p className="font-medium">Dividido nas Quinzenas</p>
+                                            <p className="text-sm text-gray-500">Receber 50% na primeira e 50% na segunda quinzena</p>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                         <div className="flex gap-4 mt-6">
-                            <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"><i className="fas fa-paper-plane mr-2"></i>Enviar Solicitação</button>
+                            <button type="submit" className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600"><i className="fas fa-paper-plane mr-2"></i>Enviar Solicitação</button>
+                            <button type="button" onClick={onCancelar} className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            );
+        }
+
+        // Formulário para Admin registrar histórico de férias
+        function FormHistoricoFerias({ funcionarios, onSalvar, onCancelar }) {
+            const [formData, setFormData] = useState({
+                funcionarioId: '',
+                periodo: 'Registro anterior',
+                dataInicio: '',
+                dataFim: '',
+                formaPagamento: 'Não informado',
+                observacao: ''
+            });
+
+            return (
+                <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+                    <h3 className="text-xl font-bold mb-4"><i className="fas fa-history mr-2 text-green-600"></i>Registrar Férias Anteriores</h3>
+                    <p className="text-gray-600 mb-4">Use este formulário para registrar férias que o funcionário já tirou antes do sistema.</p>
+                    <form onSubmit={(e) => { e.preventDefault(); if (!formData.funcionarioId) { alert('Selecione um funcionário'); return; } onSalvar(formData); }}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block mb-2 font-medium">Funcionário *</label>
+                                <select value={formData.funcionarioId} onChange={(e) => setFormData({...formData, funcionarioId: parseInt(e.target.value)})} className="w-full px-4 py-2 border rounded-lg" required>
+                                    <option value="">Selecione um funcionário</option>
+                                    {funcionarios.map(f => <option key={f.id} value={f.id}>{f.nome} - {f.cpf}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Data Início *</label>
+                                <input type="date" value={formData.dataInicio} onChange={(e) => setFormData({...formData, dataInicio: e.target.value})} className="w-full px-4 py-2 border rounded-lg" required />
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Data Fim *</label>
+                                <input type="date" value={formData.dataFim} onChange={(e) => setFormData({...formData, dataFim: e.target.value})} className="w-full px-4 py-2 border rounded-lg" required />
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Tipo de Período</label>
+                                <select value={formData.periodo} onChange={(e) => setFormData({...formData, periodo: e.target.value})} className="w-full px-4 py-2 border rounded-lg">
+                                    <option value="Registro anterior">Registro anterior</option>
+                                    <option value="15 dias (livre escolha)">15 dias (livre escolha)</option>
+                                    <option value="15 dias (coletivo)">15 dias (coletivo)</option>
+                                    <option value="30 dias">30 dias</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Forma de Pagamento</label>
+                                <select value={formData.formaPagamento} onChange={(e) => setFormData({...formData, formaPagamento: e.target.value})} className="w-full px-4 py-2 border rounded-lg">
+                                    <option value="Não informado">Não informado</option>
+                                    <option value="Integral na 1ª Quinzena">Integral na 1ª Quinzena</option>
+                                    <option value="Integral na 2ª Quinzena">Integral na 2ª Quinzena</option>
+                                    <option value="Dividido nas Quinzenas">Dividido nas Quinzenas</option>
+                                </select>
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="block mb-2 font-medium">Observação</label>
+                                <textarea value={formData.observacao} onChange={(e) => setFormData({...formData, observacao: e.target.value})} className="w-full px-4 py-2 border rounded-lg" rows="2" placeholder="Ex: Férias referentes ao período 2023/2024" />
+                            </div>
+                        </div>
+                        <div className="flex gap-4 mt-6">
+                            <button type="submit" className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700"><i className="fas fa-save mr-2"></i>Salvar Histórico</button>
                             <button type="button" onClick={onCancelar} className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancelar</button>
                         </div>
                     </form>
@@ -1677,7 +2643,8 @@
             };
 
             const hoje = new Date().toISOString().split('T')[0];
-            const feriadosDoAno = Object.entries(FERIADOS_NACIONAIS_2025).filter(([data]) => data.startsWith(ano.toString()));
+            const feriados = { ...FERIADOS_NACIONAIS_2025, ...FERIADOS_NACIONAIS_2026 };
+            const feriadosDoAno = Object.entries(feriados).filter(([data]) => data.startsWith(ano.toString()));
             const diasSemExpediente = dados.feriadosPontoFacultativo.filter(f => f.ano === ano);
 
             // Verificar feriados próximos (5 dias)
@@ -1720,12 +2687,12 @@
                             <h3 className="text-xl font-bold mb-4">Feriados Nacionais {ano}</h3>
                             <div className="space-y-2">
                                 {feriadosDoAno.map(([data, nome]) => (
-                                    <div key={data} className="flex items-center justify-between p-3 bg-blue-50 rounded">
+                                    <div key={data} className="flex items-center justify-between p-3 bg-primary-50 rounded">
                                         <div>
                                             <p className="font-medium">{nome}</p>
                                             <p className="text-sm text-gray-600">{formatarData(data)}</p>
                                         </div>
-                                        <i className="fas fa-calendar-day text-blue-600"></i>
+                                        <i className="fas fa-calendar-day text-primary-500"></i>
                                     </div>
                                 ))}
                             </div>
@@ -1855,11 +2822,11 @@
                                 const lido = aviso.lidoPor?.includes(usuarioLogado.id);
                                 return (
                                     <div key={aviso.id} className={`bg-white p-6 rounded-lg shadow-lg border-l-4 ${
-                                        aviso.tipo === 'info' ? 'border-blue-500' :
+                                        aviso.tipo === 'info' ? 'border-primary-500' :
                                         aviso.tipo === 'warning' ? 'border-yellow-500' :
                                         aviso.tipo === 'success' ? 'border-green-500' :
                                         'border-red-500'
-                                    } ${!lido ? 'bg-blue-50' : ''}`}>
+                                    } ${!lido ? 'bg-primary-50' : ''}`}>
                                         <div className="flex justify-between items-start mb-3">
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2">
@@ -1891,20 +2858,29 @@
             );
         }
 
-        // DOCUMENTOS - Upload e visualização
+        // DOCUMENTOS - Upload e visualização com categorias
         function Documentos({ dados, atualizar, usuarioLogado }) {
-            const fileInputRef = useRef(null);
+            const [mostrarModal, setMostrarModal] = useState(false);
+            const [tipoSelecionado, setTipoSelecionado] = useState(null);
             const [uploadando, setUploadando] = useState(false);
+            const fileInputRef = useRef(null);
+
+            const handleTipoClick = (tipo) => {
+                setTipoSelecionado(tipo);
+                setTimeout(() => fileInputRef.current?.click(), 100);
+            };
 
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
-                if (file) {
+                if (file && tipoSelecionado) {
                     setUploadando(true);
                     const reader = new FileReader();
                     reader.onloadend = () => {
                         const novoDoc = {
                             id: Date.now(),
                             funcionarioId: usuarioLogado.tipo === 'admin' ? null : usuarioLogado.id,
+                            categoria: tipoSelecionado.id,
+                            categoriaNome: tipoSelecionado.nome,
                             nome: file.name,
                             tipo: file.type,
                             tamanho: file.size,
@@ -1913,6 +2889,8 @@
                         };
                         atualizar('documentos', [...dados.documentos, novoDoc]);
                         setUploadando(false);
+                        setMostrarModal(false);
+                        setTipoSelecionado(null);
                         e.target.value = '';
                     };
                     reader.readAsDataURL(file);
@@ -1926,59 +2904,435 @@
                 link.click();
             };
 
-            const meusDocumentos = dados.documentos.filter(d => d.funcionarioId === usuarioLogado.id || d.funcionarioId === null);
+            const meusDocumentos = dados.documentos.filter(d => 
+                usuarioLogado.tipo === 'admin' || d.funcionarioId === usuarioLogado.id || d.funcionarioId === null
+            );
+
+            // Agrupar documentos por categoria
+            const documentosPorCategoria = TIPOS_DOCUMENTOS.map(tipo => ({
+                ...tipo,
+                documentos: meusDocumentos.filter(d => d.categoria === tipo.id)
+            }));
 
             return (
                 <div>
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-3xl font-bold">Documentos</h2>
-                        <div>
-                            <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
-                            <button onClick={() => fileInputRef.current.click()} 
-                                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-                                disabled={uploadando}>
-                                <i className="fas fa-upload mr-2"></i>{uploadando ? 'Enviando...' : 'Enviar Documento'}
-                            </button>
-                        </div>
+                        <button onClick={() => setMostrarModal(true)} 
+                            className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600">
+                            <i className="fas fa-plus mr-2"></i>Adicionar Documento
+                        </button>
                     </div>
 
-                    <div className="bg-white p-6 rounded-lg shadow-lg">
-                        <h3 className="text-xl font-bold mb-4">Meus Documentos</h3>
-                        {meusDocumentos.length === 0 ? (
-                            <div className="text-center py-8 text-gray-500">
-                                <i className="fas fa-folder-open text-6xl mb-4"></i>
-                                <p>Nenhum documento enviado</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {meusDocumentos.map(doc => (
-                                    <div key={doc.id} className="border rounded-lg p-4 hover:shadow-md transition">
-                                        <div className="flex items-center mb-2">
-                                            <i className={`fas fa-${
-                                                doc.tipo.includes('pdf') ? 'file-pdf text-red-500' :
-                                                doc.tipo.includes('image') ? 'file-image text-blue-500' :
-                                                doc.tipo.includes('word') ? 'file-word text-blue-700' :
-                                                'file text-gray-500'
-                                            } text-3xl mr-3`}></i>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium truncate">{doc.nome}</p>
-                                                <p className="text-xs text-gray-500">{(doc.tamanho / 1024).toFixed(2)} KB</p>
-                                                <p className="text-xs text-gray-500">{new Date(doc.data).toLocaleDateString('pt-BR')}</p>
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleFileUpload} 
+                        className="hidden" 
+                        accept={tipoSelecionado?.id === 'foto' ? 'image/*' : '*/*'}
+                    />
+
+                    {/* Modal de Seleção de Tipo */}
+                    {mostrarModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-xl font-bold">Selecione o tipo de documento</h3>
+                                    <button onClick={() => setMostrarModal(false)} className="text-gray-500 hover:text-gray-700">
+                                        <i className="fas fa-times text-xl"></i>
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    {TIPOS_DOCUMENTOS.map(tipo => (
+                                        <button
+                                            key={tipo.id}
+                                            onClick={() => handleTipoClick(tipo)}
+                                            disabled={uploadando}
+                                            className={`p-4 rounded-xl border-2 hover:border-${tipo.cor}-500 hover:bg-${tipo.cor}-50 transition flex flex-col items-center gap-2 ${uploadando ? 'opacity-50' : ''}`}
+                                        >
+                                            <div className={`w-12 h-12 bg-${tipo.cor}-100 rounded-full flex items-center justify-center`}>
+                                                <i className={`fas fa-${tipo.icon} text-${tipo.cor}-500 text-xl`}></i>
                                             </div>
+                                            <span className="text-sm font-medium text-center">{tipo.nome}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                {uploadando && (
+                                    <div className="mt-4 text-center text-primary-500">
+                                        <i className="fas fa-spinner fa-spin mr-2"></i>Enviando documento...
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Lista de Documentos por Categoria */}
+                    <div className="space-y-6">
+                        {documentosPorCategoria.map(categoria => (
+                            <div key={categoria.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
+                                <div className={`bg-${categoria.cor}-500 text-white px-6 py-3 flex items-center gap-3`}>
+                                    <i className={`fas fa-${categoria.icon}`}></i>
+                                    <span className="font-medium">{categoria.nome}</span>
+                                    <span className="bg-white bg-opacity-20 px-2 py-1 rounded-full text-xs">
+                                        {categoria.documentos.length} arquivo(s)
+                                    </span>
+                                </div>
+                                <div className="p-4">
+                                    {categoria.documentos.length === 0 ? (
+                                        <p className="text-gray-400 text-center py-4 text-sm">
+                                            <i className="fas fa-inbox mr-2"></i>Nenhum documento nesta categoria
+                                        </p>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {categoria.documentos.map(doc => (
+                                                <div key={doc.id} className="border rounded-lg p-4 hover:shadow-md transition">
+                                                    {doc.categoria === 'foto' && doc.tipo.includes('image') ? (
+                                                        <div className="mb-3">
+                                                            <img src={doc.arquivo} alt="Foto" className="w-20 h-20 object-cover rounded-full mx-auto" />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center mb-3">
+                                                            <i className={`fas fa-${
+                                                                doc.tipo.includes('pdf') ? 'file-pdf text-red-500' :
+                                                                doc.tipo.includes('image') ? 'file-image text-blue-500' :
+                                                                'file text-gray-500'
+                                                            } text-3xl mr-3`}></i>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-medium truncate text-sm">{doc.nome}</p>
+                                                                <p className="text-xs text-gray-500">{(doc.tamanho / 1024).toFixed(2)} KB</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    <p className="text-xs text-gray-400 mb-3">
+                                                        <i className="fas fa-calendar mr-1"></i>
+                                                        {new Date(doc.data).toLocaleDateString('pt-BR')}
+                                                    </p>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => baixarDocumento(doc)} 
+                                                            className="flex-1 bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
+                                                            <i className="fas fa-download mr-1"></i>Baixar
+                                                        </button>
+                                                        <button onClick={() => atualizar('documentos', dados.documentos.filter(d => d.id !== doc.id))} 
+                                                            className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600">
+                                                            <i className="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => baixarDocumento(doc)} className="flex-1 bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
-                                                <i className="fas fa-download mr-1"></i>Baixar
-                                            </button>
-                                            <button onClick={() => atualizar('documentos', dados.documentos.filter(d => d.id !== doc.id))} className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700">
-                                                <i className="fas fa-trash"></i>
-                                            </button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // PLANO DE SAÚDE - Gestão de planos e carteirinhas
+        function PlanoSaude({ dados, atualizar, usuarioLogado }) {
+            const [mostrarForm, setMostrarForm] = useState(false);
+            const [planoEditando, setPlanoEditando] = useState(null);
+            const planosSaude = dados.planosSaude || [];
+
+            const salvarPlano = (plano) => {
+                if (planoEditando) {
+                    atualizar('planosSaude', planosSaude.map(p => p.id === planoEditando.id ? { ...plano, id: planoEditando.id } : p));
+                } else {
+                    atualizar('planosSaude', [...planosSaude, { ...plano, id: Date.now() }]);
+                }
+                setMostrarForm(false);
+                setPlanoEditando(null);
+            };
+
+            const excluirPlano = (id) => {
+                if (confirm('Tem certeza que deseja excluir este plano?')) {
+                    atualizar('planosSaude', planosSaude.filter(p => p.id !== id));
+                }
+            };
+
+            const gerarCarteirinhaPDF = (plano) => {
+                const func = dados.funcionarios.find(f => f.id === plano.funcionarioId);
+                if (!func) return;
+
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [85.6, 54] });
+
+                // Fundo gradiente azul
+                doc.setFillColor(59, 130, 246);
+                doc.rect(0, 0, 85.6, 54, 'F');
+
+                // Cabeçalho
+                doc.setFillColor(30, 42, 94);
+                doc.rect(0, 0, 85.6, 12, 'F');
+
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'bold');
+                doc.text(plano.operadora || 'Plano de Saúde', 42.8, 7, { align: 'center' });
+
+                // Dados do beneficiário
+                doc.setFillColor(255, 255, 255);
+                doc.roundedRect(4, 15, 77.6, 35, 2, 2, 'F');
+
+                doc.setTextColor(30, 42, 94);
+                doc.setFontSize(6);
+                doc.text('BENEFICIÁRIO', 8, 20);
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'bold');
+                doc.text(func.nome || '', 8, 25);
+
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(6);
+                doc.text('Nº CARTEIRA', 8, 31);
+                doc.setFontSize(8);
+                doc.setFont('helvetica', 'bold');
+                doc.text(plano.numeroCarteira || '', 8, 35);
+
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(6);
+                doc.text('PLANO', 45, 31);
+                doc.setFontSize(7);
+                doc.setFont('helvetica', 'bold');
+                doc.text(plano.tipoPlano || '', 45, 35);
+
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(6);
+                doc.text('VALIDADE', 8, 41);
+                doc.setFontSize(7);
+                doc.setFont('helvetica', 'bold');
+                doc.text(plano.validade ? formatarData(plano.validade) : 'Indeterminado', 8, 45);
+
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(6);
+                doc.text('CPF', 45, 41);
+                doc.setFontSize(7);
+                doc.setFont('helvetica', 'bold');
+                doc.text(func.cpf || '', 45, 45);
+
+                doc.save(`carteirinha_${func.nome.replace(/\s+/g, '_')}.pdf`);
+            };
+
+            // Visualização do funcionário
+            const meuPlano = planosSaude.find(p => p.funcionarioId === usuarioLogado.id);
+
+            if (usuarioLogado.tipo !== 'admin') {
+                return (
+                    <div>
+                        <h2 className="text-3xl font-bold mb-6">Meu Plano de Saúde</h2>
+                        {meuPlano ? (
+                            <div className="bg-white p-6 rounded-lg shadow-lg">
+                                <div className="flex items-start justify-between mb-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
+                                            <i className="fas fa-medkit text-3xl text-primary-500"></i>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-2xl font-bold text-gray-800">{meuPlano.operadora}</h3>
+                                            <p className="text-gray-500">{meuPlano.tipoPlano}</p>
                                         </div>
                                     </div>
-                                ))}
+                                    <button onClick={() => gerarCarteirinhaPDF(meuPlano)} className="bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600">
+                                        <i className="fas fa-id-card mr-2"></i>Baixar Carteirinha
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <p className="text-sm text-gray-500">Número da Carteira</p>
+                                        <p className="font-bold text-lg">{meuPlano.numeroCarteira}</p>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <p className="text-sm text-gray-500">Validade</p>
+                                        <p className="font-bold text-lg">{meuPlano.validade ? formatarData(meuPlano.validade) : 'Indeterminado'}</p>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <p className="text-sm text-gray-500">Acomodação</p>
+                                        <p className="font-bold text-lg">{meuPlano.acomodacao || '-'}</p>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <p className="text-sm text-gray-500">Abrangência</p>
+                                        <p className="font-bold text-lg">{meuPlano.abrangencia || '-'}</p>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <p className="text-sm text-gray-500">Coparticipação</p>
+                                        <p className="font-bold text-lg">{meuPlano.coparticipacao || '-'}</p>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-lg">
+                                        <p className="text-sm text-gray-500">Central de Atendimento</p>
+                                        <p className="font-bold text-lg">{meuPlano.telefoneOperadora || '-'}</p>
+                                    </div>
+                                </div>
+                                {meuPlano.observacoes && (
+                                    <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
+                                        <p className="text-sm text-gray-500 mb-1">Observações</p>
+                                        <p className="text-gray-700">{meuPlano.observacoes}</p>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="bg-white p-8 rounded-lg shadow-lg text-center text-gray-500">
+                                <i className="fas fa-medkit text-6xl mb-4 text-gray-300"></i>
+                                <p>Você ainda não possui um plano de saúde cadastrado.</p>
+                                <p className="text-sm mt-2">Entre em contato com o RH para mais informações.</p>
                             </div>
                         )}
                     </div>
+                );
+            }
+
+            // Visualização do admin
+            return (
+                <div>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-3xl font-bold">Plano de Saúde</h2>
+                        <button onClick={() => { setPlanoEditando(null); setMostrarForm(true); }} className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600">
+                            <i className="fas fa-plus mr-2"></i>Cadastrar Plano
+                        </button>
+                    </div>
+
+                    {mostrarForm && (
+                        <FormPlanoSaude 
+                            plano={planoEditando}
+                            funcionarios={dados.funcionarios}
+                            onSalvar={salvarPlano}
+                            onCancelar={() => { setMostrarForm(false); setPlanoEditando(null); }}
+                        />
+                    )}
+
+                    <div className="bg-white p-6 rounded-lg shadow-lg">
+                        <h3 className="text-xl font-bold mb-4">Planos Cadastrados</h3>
+                        {planosSaude.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                                <i className="fas fa-medkit text-6xl mb-4 text-gray-300"></i>
+                                <p>Nenhum plano cadastrado</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="text-left p-3">Funcionário</th>
+                                            <th className="text-left p-3">Operadora</th>
+                                            <th className="text-left p-3">Plano</th>
+                                            <th className="text-left p-3">Nº Carteira</th>
+                                            <th className="text-left p-3">Validade</th>
+                                            <th className="text-center p-3">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {planosSaude.map(plano => {
+                                            const func = dados.funcionarios.find(f => f.id === plano.funcionarioId);
+                                            return (
+                                                <tr key={plano.id} className="border-b hover:bg-gray-50">
+                                                    <td className="p-3">{func?.nome || '-'}</td>
+                                                    <td className="p-3">{plano.operadora}</td>
+                                                    <td className="p-3">{plano.tipoPlano}</td>
+                                                    <td className="p-3 font-mono">{plano.numeroCarteira}</td>
+                                                    <td className="p-3">{plano.validade ? formatarData(plano.validade) : 'Indeterminado'}</td>
+                                                    <td className="p-3 text-center">
+                                                        <button onClick={() => gerarCarteirinhaPDF(plano)} className="text-primary-600 hover:text-primary-800 mr-2" title="Gerar Carteirinha">
+                                                            <i className="fas fa-id-card"></i>
+                                                        </button>
+                                                        <button onClick={() => { setPlanoEditando(plano); setMostrarForm(true); }} className="text-yellow-600 hover:text-yellow-800 mr-2" title="Editar">
+                                                            <i className="fas fa-edit"></i>
+                                                        </button>
+                                                        <button onClick={() => excluirPlano(plano.id)} className="text-red-600 hover:text-red-800" title="Excluir">
+                                                            <i className="fas fa-trash"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Formulário de Plano de Saúde
+        function FormPlanoSaude({ plano, funcionarios, onSalvar, onCancelar }) {
+            const [formData, setFormData] = useState(plano || {
+                funcionarioId: '',
+                operadora: '',
+                tipoPlano: '',
+                numeroCarteira: '',
+                validade: '',
+                acomodacao: 'Enfermaria',
+                abrangencia: 'Nacional',
+                coparticipacao: 'Sim',
+                telefoneOperadora: '',
+                observacoes: ''
+            });
+
+            return (
+                <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+                    <h3 className="text-xl font-bold mb-4">{plano ? 'Editar' : 'Cadastrar'} Plano de Saúde</h3>
+                    <form onSubmit={(e) => { e.preventDefault(); if (!formData.funcionarioId) { alert('Selecione um funcionário'); return; } onSalvar(formData); }}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="lg:col-span-3">
+                                <label className="block mb-2 font-medium">Funcionário *</label>
+                                <select value={formData.funcionarioId} onChange={(e) => setFormData({...formData, funcionarioId: parseInt(e.target.value)})} className="w-full px-4 py-2 border rounded-lg" required>
+                                    <option value="">Selecione um funcionário</option>
+                                    {funcionarios.map(f => <option key={f.id} value={f.id}>{f.nome} - {f.cpf}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Operadora *</label>
+                                <input type="text" value={formData.operadora} onChange={(e) => setFormData({...formData, operadora: e.target.value})} className="w-full px-4 py-2 border rounded-lg" placeholder="Ex: Unimed, Bradesco Saúde" required />
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Tipo de Plano *</label>
+                                <input type="text" value={formData.tipoPlano} onChange={(e) => setFormData({...formData, tipoPlano: e.target.value})} className="w-full px-4 py-2 border rounded-lg" placeholder="Ex: Empresarial, Familiar" required />
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Número da Carteira *</label>
+                                <input type="text" value={formData.numeroCarteira} onChange={(e) => setFormData({...formData, numeroCarteira: e.target.value})} className="w-full px-4 py-2 border rounded-lg" required />
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Validade</label>
+                                <input type="date" value={formData.validade} onChange={(e) => setFormData({...formData, validade: e.target.value})} className="w-full px-4 py-2 border rounded-lg" />
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Acomodação</label>
+                                <select value={formData.acomodacao} onChange={(e) => setFormData({...formData, acomodacao: e.target.value})} className="w-full px-4 py-2 border rounded-lg">
+                                    <option value="Enfermaria">Enfermaria</option>
+                                    <option value="Apartamento">Apartamento</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Abrangência</label>
+                                <select value={formData.abrangencia} onChange={(e) => setFormData({...formData, abrangencia: e.target.value})} className="w-full px-4 py-2 border rounded-lg">
+                                    <option value="Nacional">Nacional</option>
+                                    <option value="Regional">Regional</option>
+                                    <option value="Municipal">Municipal</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Coparticipação</label>
+                                <select value={formData.coparticipacao} onChange={(e) => setFormData({...formData, coparticipacao: e.target.value})} className="w-full px-4 py-2 border rounded-lg">
+                                    <option value="Sim">Sim</option>
+                                    <option value="Não">Não</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Telefone da Operadora</label>
+                                <input type="tel" value={formData.telefoneOperadora} onChange={(e) => setFormData({...formData, telefoneOperadora: e.target.value})} className="w-full px-4 py-2 border rounded-lg" placeholder="0800 000 0000" />
+                            </div>
+                            <div className="lg:col-span-3">
+                                <label className="block mb-2 font-medium">Observações</label>
+                                <textarea value={formData.observacoes} onChange={(e) => setFormData({...formData, observacoes: e.target.value})} className="w-full px-4 py-2 border rounded-lg" rows="2" placeholder="Informações adicionais sobre o plano..." />
+                            </div>
+                        </div>
+                        <div className="flex gap-4 mt-6">
+                            <button type="submit" className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700">
+                                <i className="fas fa-save mr-2"></i>Salvar
+                            </button>
+                            <button type="button" onClick={onCancelar} className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancelar</button>
+                        </div>
+                    </form>
                 </div>
             );
         }
@@ -1991,7 +3345,7 @@
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="bg-white p-6 rounded-lg shadow-lg">
                             <h3 className="text-xl font-bold mb-4 flex items-center">
-                                <i className="fas fa-info-circle text-blue-600 mr-2"></i>Sobre o Sistema
+                                <i className="fas fa-info-circle text-primary-500 mr-2"></i>Sobre o Sistema
                             </h3>
                             <div className="space-y-3 text-gray-700">
                                 <p><strong>Nome:</strong> Sistema de Gestão de Funcionários</p>
