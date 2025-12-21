@@ -632,35 +632,11 @@
                             </button>
                         </form>
                         
-                        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                            <button onClick={() => setMostrarAjuda(!mostrarAjuda)} 
-                                className="w-full text-sm text-primary-500 hover:text-primary-700 flex items-center justify-center gap-2">
-                                <i className={`fas fa-chevron-${mostrarAjuda ? 'up' : 'down'}`}></i>
-                                Credenciais de Teste
-                            </button>
-                            {mostrarAjuda && (
-                                <div className="mt-3 space-y-3 text-sm">
-                                    <div className="p-3 bg-red-50 rounded border-l-4 border-red-500">
-                                        <p className="font-bold text-red-700">Admin</p>
-                                        <p className="text-gray-700">Usuário: <code className="bg-gray-200 px-1 rounded">admin</code></p>
-                                        <p className="text-gray-700">Senha: <code className="bg-gray-200 px-1 rounded">admin123</code></p>
-                                    </div>
-                                    <div className="p-3 bg-primary-50 rounded border-l-4 border-primary-500">
-                                        <p className="font-bold text-primary-600">Funcionário Teste</p>
-                                        <p className="text-gray-700">CPF: <code className="bg-gray-200 px-1 rounded">123.456.789-09</code></p>
-                                        <p className="text-gray-700">Senha: <code className="bg-gray-200 px-1 rounded">func123</code></p>
-                                    </div>
-                                    {funcionarios.length > 0 && (
-                                        <div className="p-3 bg-green-50 rounded border-l-4 border-green-500">
-                                            <p className="font-bold text-green-700">Funcionários Cadastrados</p>
-                                            {funcionarios.slice(0, 3).map(f => (
-                                                <p key={f.id} className="text-gray-700 text-xs">{f.nome}: <code className="bg-gray-200 px-1 rounded">{f.cpf}</code></p>
-                                            ))}
-                                            <p className="text-gray-600 text-xs mt-1">Senha: func123</p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                        <div className="mt-6 p-4 bg-gray-50 rounded-lg text-center">
+                            <p className="text-sm text-gray-600">
+                                <i className="fas fa-info-circle mr-2"></i>
+                                Funcionários: utilize seu CPF como usuário e senha
+                            </p>
                         </div>
                     </div>
                 </div>
