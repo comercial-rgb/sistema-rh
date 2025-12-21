@@ -3,11 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Gestão de Funcionários</title>
+    <title>Sistema de Gestão de Funcionários - InstaSolutions</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script>
+        // Configuração do Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDKf9setpNeq7R1oxLHbDmoEOOk63lCyvw",
+            authDomain: "sistema-rh-instasolutions.firebaseapp.com",
+            projectId: "sistema-rh-instasolutions",
+            storageBucket: "sistema-rh-instasolutions.firebasestorage.app",
+            messagingSenderId: "753715004038",
+            appId: "1:753715004038:web:d6645e27b1d6f78b65c707",
+            measurementId: "G-7BV46ML4Y4"
+        };
+        
+        // Inicializa Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+    </script>
     <script>
         tailwind.config = {
             theme: {
@@ -38,6 +59,18 @@
         :root {
             --color-primary: #3B82F6;
             --color-primary-dark: #1E2A5E;
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3B82F6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -273,7 +306,66 @@
             };
         };
 
-        // Sistema de armazenamento local otimizado
+        // Sistema de armazenamento Firebase Firestore
+        const FirebaseStorage = {
+            // Salva dados em uma coleção do Firestore
+            saveCollection: async (collection, data) => {
+                try {
+                    const docRef = db.collection('sistemaRH').doc(collection);
+                    await docRef.set({ data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                    return true;
+                } catch (e) {
+                    console.error('Erro ao salvar no Firebase:', e);
+                    return false;
+                }
+            },
+            // Carrega dados de uma coleção do Firestore
+            loadCollection: async (collection, defaultValue = null) => {
+                try {
+                    const docRef = db.collection('sistemaRH').doc(collection);
+                    const doc = await docRef.get();
+                    if (doc.exists) {
+                        return doc.data().data || defaultValue;
+                    }
+                    return defaultValue;
+                } catch (e) {
+                    console.error('Erro ao carregar do Firebase:', e);
+                    return defaultValue;
+                }
+            },
+            // Salva todos os dados do sistema
+            saveAll: async (dados) => {
+                try {
+                    const docRef = db.collection('sistemaRH').doc('dados');
+                    await docRef.set({ 
+                        ...dados, 
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+                    });
+                    return true;
+                } catch (e) {
+                    console.error('Erro ao salvar dados:', e);
+                    return false;
+                }
+            },
+            // Carrega todos os dados do sistema
+            loadAll: async (defaultValue) => {
+                try {
+                    const docRef = db.collection('sistemaRH').doc('dados');
+                    const doc = await docRef.get();
+                    if (doc.exists) {
+                        const data = doc.data();
+                        delete data.updatedAt;
+                        return data;
+                    }
+                    return defaultValue;
+                } catch (e) {
+                    console.error('Erro ao carregar dados:', e);
+                    return defaultValue;
+                }
+            }
+        };
+
+        // Sistema de armazenamento local (fallback)
         const Storage = {
             save: (key, data) => {
                 try {
@@ -302,6 +394,7 @@
                 return Storage.load('sistemaRH_sessao', null);
             });
             const [paginaAtual, setPaginaAtual] = useState('dashboard');
+            const [carregando, setCarregando] = useState(true);
             const [dados, setDados] = useState({
                 empresas: [],
                 funcionarios: [],
@@ -326,27 +419,54 @@
                 Storage.save('sistemaRH_sessao', null);
             };
 
+            // Carrega dados do Firebase ao iniciar
             useEffect(() => {
-                const dadosSalvos = Storage.load('sistemaRH_v2', {
-                    empresas: [],
-                    funcionarios: [],
-                    avisos: [],
-                    registrosPonto: [],
-                    holerites: [],
-                    solicitacoesFerias: [],
-                    historicoFerias: [],
-                    feriadosPontoFacultativo: [],
-                    documentos: [],
-                    planosSaude: []
-                });
-                setDados(dadosSalvos);
+                const carregarDados = async () => {
+                    setCarregando(true);
+                    try {
+                        const dadosFirebase = await FirebaseStorage.loadAll({
+                            empresas: [],
+                            funcionarios: [],
+                            avisos: [],
+                            registrosPonto: [],
+                            holerites: [],
+                            solicitacoesFerias: [],
+                            historicoFerias: [],
+                            feriadosPontoFacultativo: [],
+                            documentos: [],
+                            planosSaude: []
+                        });
+                        setDados(dadosFirebase);
+                    } catch (error) {
+                        console.error('Erro ao carregar dados:', error);
+                        // Fallback para localStorage se Firebase falhar
+                        const dadosSalvos = Storage.load('sistemaRH_v2', {
+                            empresas: [],
+                            funcionarios: [],
+                            avisos: [],
+                            registrosPonto: [],
+                            holerites: [],
+                            solicitacoesFerias: [],
+                            historicoFerias: [],
+                            feriadosPontoFacultativo: [],
+                            documentos: [],
+                            planosSaude: []
+                        });
+                        setDados(dadosSalvos);
+                    }
+                    setCarregando(false);
+                };
+                carregarDados();
             }, []);
 
+            // Salva dados no Firebase quando alterados
             useEffect(() => {
-                if (usuarioLogado) {
+                if (usuarioLogado && !carregando) {
+                    FirebaseStorage.saveAll(dados);
+                    // Mantém backup local também
                     Storage.save('sistemaRH_v2', dados);
                 }
-            }, [dados, usuarioLogado]);
+            }, [dados, usuarioLogado, carregando]);
 
             const atualizarDados = (campo, valor) => {
                 setDados(prev => ({ ...prev, [campo]: valor }));
@@ -355,6 +475,19 @@
             const avisosNaoLidos = dados.avisos.filter(a => 
                 !a.lidoPor?.includes(usuarioLogado?.id)
             ).length;
+
+            // Tela de carregamento enquanto busca dados do Firebase
+            if (carregando) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="loading-spinner mx-auto mb-4"></div>
+                            <p className="text-white text-lg">Carregando dados...</p>
+                            <p className="text-primary-200 text-sm mt-2">Sistema RH - InstaSolutions</p>
+                        </div>
+                    </div>
+                );
+            }
 
             if (!usuarioLogado) {
                 return <Login onLogin={handleLogin} funcionarios={dados.funcionarios} />;
