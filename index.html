@@ -412,6 +412,13 @@
             const handleLogin = (usuario) => {
                 setUsuarioLogado(usuario);
                 Storage.save('sistemaRH_sessao', usuario);
+
+                // Se for primeiro acesso do funcionário, força definição de senha
+                if (usuario?.tipo === 'funcionario' && usuario?.precisaDefinirSenha) {
+                    setPaginaAtual('definir-senha');
+                } else {
+                    setPaginaAtual('dashboard');
+                }
             };
 
             const handleLogout = () => {
@@ -491,6 +498,28 @@
 
             if (!usuarioLogado) {
                 return <Login onLogin={handleLogin} funcionarios={dados.funcionarios} />;
+            }
+
+            // Força o funcionário a definir senha pessoal no primeiro acesso
+            const funcionarioLogado = usuarioLogado.tipo === 'funcionario'
+                ? dados.funcionarios.find(f => f.id === usuarioLogado.id)
+                : null;
+
+            const precisaDefinirSenha = usuarioLogado.tipo === 'funcionario'
+                && funcionarioLogado
+                && funcionarioLogado.senhaPersonalizada !== true;
+
+            if (precisaDefinirSenha) {
+                return (
+                    <DefinirSenhaPrimeiroAcesso
+                        usuarioLogado={usuarioLogado}
+                        funcionario={funcionarioLogado}
+                        atualizar={atualizarDados}
+                        dados={dados}
+                        onLogout={handleLogout}
+                        onDone={() => setPaginaAtual('dashboard')}
+                    />
+                );
             }
 
             return (
@@ -578,7 +607,13 @@
                     const senhaCorreta = func.senhaPersonalizada ? func.senha : cpfLimpo;
                     
                     if (senha === senhaCorreta) {
-                        onLogin({ nome: func.nome, tipo: 'funcionario', id: func.id, cpf: func.cpf });
+                        onLogin({ 
+                            nome: func.nome, 
+                            tipo: 'funcionario', 
+                            id: func.id, 
+                            cpf: func.cpf,
+                            precisaDefinirSenha: func.senhaPersonalizada !== true
+                        });
                         return;
                     }
                 }
@@ -615,8 +650,121 @@
                         <div className="mt-6 p-4 bg-gray-50 rounded-lg text-center">
                             <p className="text-sm text-gray-600">
                                 <i className="fas fa-info-circle mr-2"></i>
-                                Funcionários: utilize seu CPF como usuário e senha
+                                Primeiro acesso: use seu CPF como usuário e senha. Depois, defina uma senha pessoal.
                             </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Primeiro acesso - funcionário deve definir senha pessoal
+        function DefinirSenhaPrimeiroAcesso({ usuarioLogado, funcionario, dados, atualizar, onLogout, onDone }) {
+            const [senha, setSenha] = useState('');
+            const [confirmarSenha, setConfirmarSenha] = useState('');
+            const [erro, setErro] = useState('');
+            const [salvando, setSalvando] = useState(false);
+
+            const cpfLimpo = (funcionario?.cpf || usuarioLogado?.cpf || '').replace(/\D/g, '');
+
+            const salvar = async (e) => {
+                e.preventDefault();
+                setErro('');
+
+                const senhaTrim = senha.trim();
+                if (senhaTrim.length < 4) {
+                    setErro('A senha deve ter no mínimo 4 caracteres.');
+                    return;
+                }
+                if (senhaTrim !== confirmarSenha.trim()) {
+                    setErro('As senhas não conferem.');
+                    return;
+                }
+                if (cpfLimpo && senhaTrim.replace(/\D/g, '') === cpfLimpo) {
+                    setErro('A senha pessoal não pode ser igual ao CPF.');
+                    return;
+                }
+
+                setSalvando(true);
+                try {
+                    atualizar('funcionarios', (dados.funcionarios || []).map(f =>
+                        f.id === usuarioLogado.id
+                            ? { ...f, senhaPersonalizada: true, senha: senhaTrim }
+                            : f
+                    ));
+                    onDone && onDone();
+                } finally {
+                    setSalvando(false);
+                }
+            };
+
+            if (!funcionario) {
+                return (
+                    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+                        <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md text-center">
+                            <h2 className="text-2xl font-bold mb-2">Primeiro acesso</h2>
+                            <p className="text-gray-600 mb-6">Não foi possível localizar seus dados. Faça login novamente.</p>
+                            <button onClick={onLogout} className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700">Sair</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-primary-500 to-primary-900 flex items-center justify-center p-6">
+                    <div className="bg-white p-8 rounded-lg shadow-2xl w-full max-w-md">
+                        <div className="text-center mb-6">
+                            <LogoInstaSolutions size="lg" variant="vertical" />
+                            <h2 className="text-2xl font-bold text-gray-800 mt-4">Defina sua senha</h2>
+                            <p className="text-gray-600 text-sm mt-2">
+                                Primeiro acesso obrigatório. Crie uma senha pessoal para continuar.
+                            </p>
+                        </div>
+
+                        <form onSubmit={salvar}>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 mb-2">Nova senha</label>
+                                <input
+                                    type="password"
+                                    value={senha}
+                                    onChange={(e) => setSenha(e.target.value)}
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                    placeholder="Digite sua nova senha"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="mb-6">
+                                <label className="block text-gray-700 mb-2">Confirmar senha</label>
+                                <input
+                                    type="password"
+                                    value={confirmarSenha}
+                                    onChange={(e) => setConfirmarSenha(e.target.value)}
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                    placeholder="Repita a senha"
+                                />
+                            </div>
+
+                            {erro && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{erro}</div>}
+
+                            <button
+                                type="submit"
+                                disabled={salvando}
+                                className={`w-full text-white py-2 rounded-lg transition ${salvando ? 'bg-gray-400' : 'bg-primary-600 hover:bg-primary-700'}`}
+                            >
+                                {salvando ? 'Salvando...' : 'Salvar e continuar'}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={onLogout}
+                                className="w-full mt-3 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700"
+                            >
+                                Sair
+                            </button>
+                        </form>
+
+                        <div className="mt-6 text-xs text-gray-500">
+                            Dica: use uma senha diferente do seu CPF.
                         </div>
                     </div>
                 </div>
@@ -980,24 +1128,24 @@
                                 <i className="fas fa-bolt text-yellow-500 mr-2"></i>
                                 Ações Rápidas
                             </h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-2 gap-3">
                                 <button onClick={() => onNavigate && onNavigate('funcionarios')}
-                                    className="flex flex-col items-center justify-center p-4 bg-primary-50 hover:bg-primary-100 rounded-lg text-center transition w-full h-full">
+                                    className="p-4 bg-primary-50 hover:bg-primary-100 rounded-lg text-center transition w-full aspect-square flex flex-col items-center justify-center">
                                     <i className="fas fa-user-plus text-primary-500 text-xl mb-2"></i>
                                     <p className="text-sm font-medium text-primary-700">Novo Funcionário</p>
                                 </button>
                                 <button onClick={() => onNavigate && onNavigate('empresas')}
-                                    className="flex flex-col items-center justify-center p-4 bg-green-50 hover:bg-green-100 rounded-lg text-center transition w-full h-full">
+                                    className="p-4 bg-green-50 hover:bg-green-100 rounded-lg text-center transition w-full aspect-square flex flex-col items-center justify-center">
                                     <i className="fas fa-building text-green-500 text-xl mb-2"></i>
                                     <p className="text-sm font-medium text-green-700">Nova Empresa</p>
                                 </button>
                                 <button onClick={() => onNavigate && onNavigate('rendimentos')}
-                                    className="flex flex-col items-center justify-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg text-center transition w-full h-full">
+                                    className="p-4 bg-orange-50 hover:bg-orange-100 rounded-lg text-center transition w-full aspect-square flex flex-col items-center justify-center">
                                     <i className="fas fa-file-invoice text-orange-500 text-xl mb-2"></i>
                                     <p className="text-sm font-medium text-orange-700">Novo Holerite</p>
                                 </button>
                                 <button onClick={() => onNavigate && onNavigate('avisos')}
-                                    className="flex flex-col items-center justify-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg text-center transition w-full h-full">
+                                    className="p-4 bg-purple-50 hover:bg-purple-100 rounded-lg text-center transition w-full aspect-square flex flex-col items-center justify-center">
                                     <i className="fas fa-bullhorn text-purple-500 text-xl mb-2"></i>
                                     <p className="text-sm font-medium text-purple-700">Novo Aviso</p>
                                 </button>
