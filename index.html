@@ -370,7 +370,7 @@
             save: (key, data) => {
                 try {
                     // Cria backup antes de salvar
-                    this.createBackup(key, data);
+                    Storage.createBackup(key, data);
                     localStorage.setItem(key, JSON.stringify(data));
                     return true;
                 } catch (e) {
