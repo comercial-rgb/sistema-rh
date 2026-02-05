@@ -369,6 +369,8 @@
         const Storage = {
             save: (key, data) => {
                 try {
+                    // Cria backup antes de salvar
+                    this.createBackup(key, data);
                     localStorage.setItem(key, JSON.stringify(data));
                     return true;
                 } catch (e) {
@@ -383,6 +385,46 @@
                 } catch (e) {
                     console.error('Erro ao carregar:', e);
                     return defaultValue;
+                }
+            },
+            createBackup: (key, data) => {
+                try {
+                    const timestamp = new Date().toISOString();
+                    const backupKey = `${key}_backup_${timestamp}`;
+                    localStorage.setItem(backupKey, JSON.stringify(data));
+                    
+                    // Mantém apenas os últimos 10 backups
+                    const backups = Object.keys(localStorage).filter(k => k.startsWith(`${key}_backup_`));
+                    if (backups.length > 10) {
+                        backups.sort().slice(0, backups.length - 10).forEach(k => localStorage.removeItem(k));
+                    }
+                } catch (e) {
+                    console.warn('Erro ao criar backup:', e);
+                }
+            },
+            listBackups: (key) => {
+                try {
+                    return Object.keys(localStorage)
+                        .filter(k => k.startsWith(`${key}_backup_`))
+                        .sort()
+                        .reverse()
+                        .map(k => ({
+                            key: k,
+                            timestamp: k.replace(`${key}_backup_`, ''),
+                            data: JSON.parse(localStorage.getItem(k))
+                        }));
+                } catch (e) {
+                    console.error('Erro ao listar backups:', e);
+                    return [];
+                }
+            },
+            restoreBackup: (backupKey) => {
+                try {
+                    const data = localStorage.getItem(backupKey);
+                    return data ? JSON.parse(data) : null;
+                } catch (e) {
+                    console.error('Erro ao restaurar backup:', e);
+                    return null;
                 }
             }
         };
@@ -431,6 +473,10 @@
                 const carregarDados = async () => {
                     setCarregando(true);
                     try {
+                        // Primeiro tenta carregar do localStorage (mais rápido)
+                        const dadosLocal = Storage.load('sistemaRH_v2', null);
+                        console.log('📂 Dados do localStorage:', dadosLocal ? 'Encontrados' : 'Não encontrados');
+                        
                         const dadosFirebase = await FirebaseStorage.loadAll({
                             empresas: [],
                             funcionarios: [],
@@ -444,16 +490,47 @@
                             planosSaude: []
                         });
                         
-                        // Verifica integridade dos dados antes de aplicar
-                        if (dadosFirebase && typeof dadosFirebase === 'object') {
-                            setDados(dadosFirebase);
-                            // Salva no localStorage como backup
-                            Storage.save('sistemaRH_v2', dadosFirebase);
+                        console.log('☁️ Dados do Firebase:', dadosFirebase);
+                        
+                        // Verifica se Firebase tem dados válidos
+                        const firebaseTemDados = dadosFirebase && 
+                            typeof dadosFirebase === 'object' && 
+                            (dadosFirebase.funcionarios?.length > 0 || 
+                             dadosFirebase.empresas?.length > 0 ||
+                             dadosFirebase.holerites?.length > 0);
+                        
+                        // Verifica se localStorage tem dados
+                        const localTemDados = dadosLocal &&
+                            typeof dadosLocal === 'object' &&
+                            (dadosLocal.funcionarios?.length > 0 || 
+                             dadosLocal.empresas?.length > 0 ||
+                             dadosLocal.holerites?.length > 0);
+                        
+                        console.log('🔍 Firebase tem dados:', firebaseTemDados);
+                        console.log('🔍 Local tem dados:', localTemDados);
+                        
+                        // Decide qual fonte usar
+                        let dadosParaCarregar;
+                        
+                        if (firebaseTemDados) {
+                            console.log('✅ Usando dados do Firebase');
+                            dadosParaCarregar = dadosFirebase;
+                        } else if (localTemDados) {
+                            console.log('⚠️ Firebase vazio, usando dados do localStorage');
+                            dadosParaCarregar = dadosLocal;
+                            // Sincroniza dados locais para o Firebase
+                            FirebaseStorage.saveAll(dadosLocal);
                         } else {
-                            throw new Error('Dados inválidos retornados do Firebase');
+                            console.log('📭 Nenhum dado encontrado, iniciando vazio');
+                            dadosParaCarregar = dadosFirebase;
                         }
+                        
+                        setDados(dadosParaCarregar);
+                        // Salva no localStorage como backup
+                        Storage.save('sistemaRH_v2', dadosParaCarregar);
+                        
                     } catch (error) {
-                        console.error('Erro ao carregar dados do Firebase:', error);
+                        console.error('❌ Erro ao carregar dados do Firebase:', error);
                         // Fallback para localStorage se Firebase falhar
                         const dadosSalvos = Storage.load('sistemaRH_v2', {
                             empresas: [],
@@ -584,6 +661,9 @@
                             )}
                             {paginaAtual === 'plano-saude' && (
                                 <PlanoSaude dados={dados} atualizar={atualizarDados} usuarioLogado={usuarioLogado} />
+                            )}
+                            {paginaAtual === 'recuperacao' && usuarioLogado.tipo === 'admin' && (
+                                <RecuperacaoDados dados={dados} setDados={setDados} />
                             )}
                             {paginaAtual === 'informacoes' && (
                                 <Informacoes />
@@ -807,6 +887,7 @@
                 { id: 'avisos', icon: 'bullhorn', label: 'Avisos', badge: avisosNaoLidos },
                 { id: 'documentos', icon: 'file-alt', label: 'Documentos' },
                 { id: 'acessos', icon: 'user-lock', label: 'Gestão de Acessos' },
+                { id: 'recuperacao', icon: 'database', label: 'Recuperação de Dados' },
                 { id: 'informacoes', icon: 'info-circle', label: 'Informações' },
             ] : [
                 { id: 'dashboard', icon: 'chart-line', label: 'Início' },
@@ -3960,6 +4041,261 @@
                                             className="w-full bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600"
                                         >
                                             <i className="fas fa-undo mr-2"></i>Resetar Senha (CPF)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // RECUPERAÇÃO DE DADOS
+        function RecuperacaoDados({ dados, setDados }) {
+            const [backups, setBackups] = useState([]);
+            const [backupSelecionado, setBackupSelecionado] = useState(null);
+            const [mostrarDetalhes, setMostrarDetalhes] = useState(false);
+
+            useEffect(() => {
+                carregarBackups();
+            }, []);
+
+            const carregarBackups = () => {
+                const listaBackups = Storage.listBackups('sistemaRH_v2');
+                setBackups(listaBackups);
+            };
+
+            const visualizarBackup = (backup) => {
+                setBackupSelecionado(backup);
+                setMostrarDetalhes(true);
+            };
+
+            const restaurarBackup = (backup) => {
+                if (confirm(`Tem certeza que deseja restaurar o backup de ${new Date(backup.timestamp).toLocaleString('pt-BR')}?\n\nISTO IRÁ SUBSTITUIR TODOS OS DADOS ATUAIS!`)) {
+                    setDados(backup.data);
+                    Storage.save('sistemaRH_v2', backup.data);
+                    FirebaseStorage.saveAll(backup.data);
+                    alert('✅ Backup restaurado com sucesso!');
+                    setMostrarDetalhes(false);
+                }
+            };
+
+            const exportarDados = () => {
+                const dataStr = JSON.stringify(dados, null, 2);
+                const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `backup-sistema-rh-${new Date().toISOString()}.json`;
+                link.click();
+            };
+
+            const importarDados = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const dadosImportados = JSON.parse(e.target.result);
+                            if (confirm('Tem certeza que deseja importar estes dados? Isso substituirá todos os dados atuais!')) {
+                                setDados(dadosImportados);
+                                Storage.save('sistemaRH_v2', dadosImportados);
+                                FirebaseStorage.saveAll(dadosImportados);
+                                alert('✅ Dados importados com sucesso!');
+                            }
+                        } catch (error) {
+                            alert('❌ Erro ao importar dados: ' + error.message);
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+
+            return (
+                <div>
+                    <h2 className="text-3xl font-bold mb-6">🔄 Recuperação de Dados</h2>
+                    
+                    {/* Estatísticas Atuais */}
+                    <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+                        <h3 className="text-xl font-bold mb-4">📊 Dados Atuais no Sistema</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                            <div className="text-center p-4 bg-blue-50 rounded-lg">
+                                <div className="text-3xl font-bold text-blue-600">{dados.empresas?.length || 0}</div>
+                                <div className="text-sm text-gray-600">Empresas</div>
+                            </div>
+                            <div className="text-center p-4 bg-green-50 rounded-lg">
+                                <div className="text-3xl font-bold text-green-600">{dados.funcionarios?.length || 0}</div>
+                                <div className="text-sm text-gray-600">Funcionários</div>
+                            </div>
+                            <div className="text-center p-4 bg-purple-50 rounded-lg">
+                                <div className="text-3xl font-bold text-purple-600">{dados.holerites?.length || 0}</div>
+                                <div className="text-sm text-gray-600">Holerites</div>
+                            </div>
+                            <div className="text-center p-4 bg-orange-50 rounded-lg">
+                                <div className="text-3xl font-bold text-orange-600">{dados.registrosPonto?.length || 0}</div>
+                                <div className="text-sm text-gray-600">Registros Ponto</div>
+                            </div>
+                            <div className="text-center p-4 bg-red-50 rounded-lg">
+                                <div className="text-3xl font-bold text-red-600">{dados.documentos?.length || 0}</div>
+                                <div className="text-sm text-gray-600">Documentos</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Ações Rápidas */}
+                    <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+                        <h3 className="text-xl font-bold mb-4">⚡ Ações Rápidas</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <button onClick={exportarDados} className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700">
+                                <i className="fas fa-download mr-2"></i>
+                                Exportar Dados (JSON)
+                            </button>
+                            <label className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 cursor-pointer text-center">
+                                <i className="fas fa-upload mr-2"></i>
+                                Importar Dados (JSON)
+                                <input type="file" accept=".json" onChange={importarDados} className="hidden" />
+                            </label>
+                            <button onClick={carregarBackups} className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700">
+                                <i className="fas fa-sync-alt mr-2"></i>
+                                Atualizar Backups
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Lista de Backups */}
+                    <div className="bg-white p-6 rounded-lg shadow-lg">
+                        <h3 className="text-xl font-bold mb-4">💾 Backups Automáticos Disponíveis ({backups.length})</h3>
+                        
+                        {backups.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                                <i className="fas fa-database text-6xl mb-4"></i>
+                                <p>Nenhum backup automático encontrado</p>
+                                <p className="text-sm mt-2">Os backups são criados automaticamente ao salvar dados</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {backups.map((backup, index) => {
+                                    const data = new Date(backup.timestamp);
+                                    return (
+                                        <div key={index} className="border rounded-lg p-4 hover:bg-gray-50">
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex-1">
+                                                    <div className="font-bold text-lg">
+                                                        <i className="fas fa-clock text-blue-500 mr-2"></i>
+                                                        {data.toLocaleString('pt-BR')}
+                                                    </div>
+                                                    <div className="text-sm text-gray-600 mt-2 grid grid-cols-5 gap-2">
+                                                        <span>📦 {backup.data.empresas?.length || 0} empresas</span>
+                                                        <span>👥 {backup.data.funcionarios?.length || 0} funcionários</span>
+                                                        <span>💰 {backup.data.holerites?.length || 0} holerites</span>
+                                                        <span>⏰ {backup.data.registrosPonto?.length || 0} pontos</span>
+                                                        <span>📄 {backup.data.documentos?.length || 0} docs</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2 ml-4">
+                                                    <button 
+                                                        onClick={() => visualizarBackup(backup)}
+                                                        className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+                                                    >
+                                                        <i className="fas fa-eye mr-1"></i> Ver Detalhes
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => restaurarBackup(backup)}
+                                                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                                                    >
+                                                        <i className="fas fa-undo mr-1"></i> Restaurar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Modal de Detalhes */}
+                    {mostrarDetalhes && backupSelecionado && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setMostrarDetalhes(false)}>
+                            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                                <div className="p-6">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-2xl font-bold">
+                                            📋 Detalhes do Backup
+                                        </h3>
+                                        <button onClick={() => setMostrarDetalhes(false)} className="text-gray-500 hover:text-gray-700">
+                                            <i className="fas fa-times text-2xl"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                                        <p className="font-bold">Data: {new Date(backupSelecionado.timestamp).toLocaleString('pt-BR')}</p>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        {/* Holerites */}
+                                        <div className="border rounded-lg p-4">
+                                            <h4 className="font-bold mb-2">💰 Holerites ({backupSelecionado.data.holerites?.length || 0})</h4>
+                                            {backupSelecionado.data.holerites?.length > 0 ? (
+                                                <div className="max-h-40 overflow-y-auto">
+                                                    {backupSelecionado.data.holerites.map((h, i) => (
+                                                        <div key={i} className="text-sm text-gray-600 py-1 border-b">
+                                                            Funcionário ID: {h.funcionarioId} - {h.mes}/{h.ano} - {formatarMoeda(h.salarioLiquido)}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-gray-500 text-sm">Nenhum holerite neste backup</p>
+                                            )}
+                                        </div>
+
+                                        {/* Funcionários */}
+                                        <div className="border rounded-lg p-4">
+                                            <h4 className="font-bold mb-2">👥 Funcionários ({backupSelecionado.data.funcionarios?.length || 0})</h4>
+                                            {backupSelecionado.data.funcionarios?.length > 0 ? (
+                                                <div className="max-h-40 overflow-y-auto">
+                                                    {backupSelecionado.data.funcionarios.map((f, i) => (
+                                                        <div key={i} className="text-sm text-gray-600 py-1 border-b">
+                                                            {f.nome} - {f.cargo} - {f.status}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-gray-500 text-sm">Nenhum funcionário neste backup</p>
+                                            )}
+                                        </div>
+
+                                        {/* Empresas */}
+                                        <div className="border rounded-lg p-4">
+                                            <h4 className="font-bold mb-2">🏢 Empresas ({backupSelecionado.data.empresas?.length || 0})</h4>
+                                            {backupSelecionado.data.empresas?.length > 0 ? (
+                                                <div>
+                                                    {backupSelecionado.data.empresas.map((e, i) => (
+                                                        <div key={i} className="text-sm text-gray-600 py-1 border-b">
+                                                            {e.razaoSocial} - {e.cnpj}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-gray-500 text-sm">Nenhuma empresa neste backup</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-6 flex gap-4">
+                                        <button 
+                                            onClick={() => restaurarBackup(backupSelecionado)}
+                                            className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700"
+                                        >
+                                            <i className="fas fa-undo mr-2"></i>
+                                            Restaurar Este Backup
+                                        </button>
+                                        <button 
+                                            onClick={() => setMostrarDetalhes(false)}
+                                            className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                                        >
+                                            Fechar
                                         </button>
                                     </div>
                                 </div>
