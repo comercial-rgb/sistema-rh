@@ -788,12 +788,32 @@
 
                 setSalvando(true);
                 try {
-                    atualizar('funcionarios', (dados.funcionarios || []).map(f =>
+                    // Atualiza os dados localmente
+                    const funcionariosAtualizados = (dados.funcionarios || []).map(f =>
                         f.id === usuarioLogado.id
                             ? { ...f, senhaPersonalizada: true, senha: senhaTrim }
                             : f
-                    ));
+                    );
+                    
+                    // Atualiza o estado local
+                    atualizar('funcionarios', funcionariosAtualizados);
+                    
+                    // Salva IMEDIATAMENTE no Firebase (sem debounce)
+                    const dadosAtualizados = { ...dados, funcionarios: funcionariosAtualizados };
+                    await FirebaseStorage.saveAll(dadosAtualizados);
+                    
+                    // Também salva no localStorage como backup
+                    Storage.save('sistemaRH_v2', dadosAtualizados);
+                    
+                    console.log('✅ Senha salva com sucesso no Firebase e localStorage');
+                    
+                    // Aguarda 500ms para garantir persistência antes de continuar
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
                     onDone && onDone();
+                } catch (error) {
+                    console.error('❌ Erro ao salvar senha:', error);
+                    setErro('Erro ao salvar senha. Tente novamente.');
                 } finally {
                     setSalvando(false);
                 }
@@ -847,10 +867,17 @@
 
                             {erro && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">{erro}</div>}
 
+                            {salvando && (
+                                <div className="mb-4 p-3 bg-blue-100 text-blue-700 rounded-lg text-sm flex items-center">
+                                    <i className="fas fa-spinner fa-spin mr-2"></i>
+                                    Salvando sua senha no servidor... Por favor, aguarde.
+                                </div>
+                            )}
+
                             <button
                                 type="submit"
                                 disabled={salvando}
-                                className={`w-full text-white py-2 rounded-lg transition ${salvando ? 'bg-gray-400' : 'bg-primary-600 hover:bg-primary-700'}`}
+                                className={`w-full text-white py-2 rounded-lg transition ${salvando ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-700'}`}
                             >
                                 {salvando ? 'Salvando...' : 'Salvar e continuar'}
                             </button>
