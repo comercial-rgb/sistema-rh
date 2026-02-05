@@ -7,6 +7,57 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não Publicado]
 
+### 🐛 Correções Críticas - 2026-02-04
+
+#### Problemas Corrigidos no Registro de Ponto
+
+**Problema 1: Registros automáticos indesejados**
+- ❌ Sistema registrava ponto automaticamente ao apenas visualizar a página
+- ✅ Implementado sistema de confirmação obrigatória antes de registrar
+- ✅ Adicionado indicador visual de processamento
+- ✅ Botões desabilitados durante o registro para evitar cliques múltiplos
+
+**Problema 2: Registros duplicados**
+- ❌ Múltiplos registros do mesmo tipo no mesmo horário (ex: 2 entradas às 11:05 e 07:34)
+- ✅ Implementada validação anti-duplicação (verifica registros nos últimos 2 minutos)
+- ✅ Sistema agora alerta o usuário se já existe registro recente similar
+
+**Problema 3: Registros sumindo no dia seguinte**
+- ❌ Registros de almoço apareciam mas desapareciam ao reabrir o sistema
+- ✅ Melhorada sincronização Firebase com debounce de 1 segundo
+- ✅ Implementado backup automático em localStorage
+- ✅ Validação de integridade dos dados antes de aplicar
+- ✅ Tratamento de erros com fallback para localStorage
+
+**Problema 4: IDs duplicados causando conflitos**
+- ❌ Uso de `Date.now()` gerava IDs iguais para registros rápidos
+- ✅ Implementado sistema de ID único: `timestamp + random string`
+- ✅ Formato: `1738684832123_a7k9m2x5p` garante unicidade total
+
+#### Melhorias de UX
+- ✅ Diálogo de confirmação mostra data, hora e tipo de registro
+- ✅ Mensagem de sucesso após registro
+- ✅ Indicador visual de "Processando registro..."
+- ✅ Indicador de sincronização automática no cabeçalho
+- ✅ Botões ficam desabilitados durante processamento
+- ✅ Bloqueio de 1 segundo após registro para evitar erros
+
+#### Alterações Técnicas
+```javascript
+// Antes
+const novoRegistro = {
+    id: Date.now(),
+    // ...
+};
+
+// Depois
+const idUnico = `${agora.getTime()}_${Math.random().toString(36).substr(2, 9)}`;
+const novoRegistro = {
+    id: idUnico,
+    // ... com validações
+};
+```
+
 ### Planejado para v1.1.0
 - Exportação de relatórios em Excel
 - Geração de PDF para holerites

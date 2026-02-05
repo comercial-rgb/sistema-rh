@@ -443,9 +443,17 @@
                             documentos: [],
                             planosSaude: []
                         });
-                        setDados(dadosFirebase);
+                        
+                        // Verifica integridade dos dados antes de aplicar
+                        if (dadosFirebase && typeof dadosFirebase === 'object') {
+                            setDados(dadosFirebase);
+                            // Salva no localStorage como backup
+                            Storage.save('sistemaRH_v2', dadosFirebase);
+                        } else {
+                            throw new Error('Dados inválidos retornados do Firebase');
+                        }
                     } catch (error) {
-                        console.error('Erro ao carregar dados:', error);
+                        console.error('Erro ao carregar dados do Firebase:', error);
                         // Fallback para localStorage se Firebase falhar
                         const dadosSalvos = Storage.load('sistemaRH_v2', {
                             empresas: [],
@@ -469,9 +477,22 @@
             // Salva dados no Firebase quando alterados
             useEffect(() => {
                 if (usuarioLogado && !carregando) {
-                    FirebaseStorage.saveAll(dados);
-                    // Mantém backup local também
-                    Storage.save('sistemaRH_v2', dados);
+                    // Adiciona debounce para não salvar excessivamente
+                    const timeoutId = setTimeout(() => {
+                        FirebaseStorage.saveAll(dados)
+                            .then(() => {
+                                // Mantém backup local também
+                                Storage.save('sistemaRH_v2', dados);
+                                console.log('Dados salvos com sucesso:', new Date().toISOString());
+                            })
+                            .catch(error => {
+                                console.error('Erro ao salvar dados:', error);
+                                // Salva no localStorage como fallback
+                                Storage.save('sistemaRH_v2', dados);
+                            });
+                    }, 1000); // Aguarda 1 segundo antes de salvar
+
+                    return () => clearTimeout(timeoutId);
                 }
             }, [dados, usuarioLogado, carregando]);
 
@@ -1496,9 +1517,17 @@
                 else if (!validarCPF(formData.cpf)) novosErros.cpf = 'CPF inválido';
                 if (!formData.cargo) novosErros.cargo = 'Obrigatório';
                 if (!formData.dataAdmissao) novosErros.dataAdmissao = 'Obrigatório';
+                if (!formData.empresaId) novosErros.empresaId = 'Recomendado vincular a uma empresa';
                 if (Object.keys(novosErros).length > 0) {
                     setErros(novosErros);
-                    return;
+                    // Se o único erro é a empresa, permitir continuar com confirmação
+                    if (Object.keys(novosErros).length === 1 && novosErros.empresaId) {
+                        if (!confirm('Funcionário sem empresa vinculada. Continuar mesmo assim?\n\nNota: O holerite não terá os dados da empresa no cabeçalho.')) {
+                            return;
+                        }
+                    } else {
+                        return;
+                    }
                 }
                 onSalvar({ ...formData, cpf: formatarCPF(formData.cpf) });
             };
@@ -1643,11 +1672,12 @@
                                 <input type="text" value={formData.pais} onChange={(e) => setFormData({...formData, pais: e.target.value})} className="w-full px-4 py-2 border rounded-lg" />
                             </div>
                             <div className="lg:col-span-3">
-                                <label className="block mb-2 font-medium">Empresa</label>
-                                <select value={formData.empresaId} onChange={(e) => setFormData({...formData, empresaId: e.target.value})} className="w-full px-4 py-2 border rounded-lg">
+                                <label className="block mb-2 font-medium">Empresa {erros.empresaId && <span className="text-yellow-600 text-sm ml-2">(Recomendado)</span>}</label>
+                                <select value={formData.empresaId} onChange={(e) => setFormData({...formData, empresaId: parseInt(e.target.value) || ''})} className={`w-full px-4 py-2 border rounded-lg ${erros.empresaId ? 'border-yellow-400 bg-yellow-50' : ''}`}>
                                     <option value="">Selecione uma empresa</option>
                                     {empresas.map(emp => <option key={emp.id} value={emp.id}>{emp.razaoSocial} - {emp.cnpj}</option>)}
                                 </select>
+                                {erros.empresaId && <p className="text-yellow-600 text-sm mt-1">{erros.empresaId}</p>}
                             </div>
                         </div>
                         <div className="flex gap-4 mt-6">
@@ -1713,26 +1743,34 @@
                         </div>
                     </div>
 
-                    {mostrarForm && usuarioLogado.tipo === 'admin' && (
-                        <FormHolerite 
-                            funcionarioId={parseInt(funcionarioSelecionado)} 
-                            mes={parseInt(mes)} 
-                            ano={parseInt(ano)} 
-                            holerite={holeriteFiltrado}
-                            onSalvar={salvarHolerite}
-                            onCancelar={() => setMostrarForm(false)}
-                            funcionario={dados.funcionarios.find(f => f.id === parseInt(funcionarioSelecionado))}
-                            empresa={dados.empresas.find(e => e.id === dados.funcionarios.find(f => f.id === parseInt(funcionarioSelecionado))?.empresaId)}
-                        />
-                    )}
+                    {mostrarForm && usuarioLogado.tipo === 'admin' && (() => {
+                        const func = dados.funcionarios.find(f => f.id === parseInt(funcionarioSelecionado));
+                        const emp = func ? dados.empresas.find(e => e.id === parseInt(func.empresaId)) : null;
+                        return (
+                            <FormHolerite 
+                                funcionarioId={parseInt(funcionarioSelecionado)} 
+                                mes={parseInt(mes)} 
+                                ano={parseInt(ano)} 
+                                holerite={holeriteFiltrado}
+                                onSalvar={salvarHolerite}
+                                onCancelar={() => setMostrarForm(false)}
+                                funcionario={func}
+                                empresa={emp}
+                            />
+                        );
+                    })()}
 
-                    {holeriteFiltrado && !mostrarForm && (
-                        <VisualizarHolerite 
-                            holerite={holeriteFiltrado} 
-                            funcionario={dados.funcionarios.find(f => f.id === holeriteFiltrado.funcionarioId)}
-                            empresa={dados.empresas.find(e => e.id === dados.funcionarios.find(f => f.id === holeriteFiltrado.funcionarioId)?.empresaId)}
-                        />
-                    )}
+                    {holeriteFiltrado && !mostrarForm && (() => {
+                        const func = dados.funcionarios.find(f => f.id === holeriteFiltrado.funcionarioId);
+                        const emp = func ? dados.empresas.find(e => e.id === parseInt(func.empresaId)) : null;
+                        return (
+                            <VisualizarHolerite 
+                                holerite={holeriteFiltrado} 
+                                funcionario={func}
+                                empresa={emp}
+                            />
+                        );
+                    })()}
 
                     {!funcionarioSelecionado && (
                         <div className="bg-white p-8 rounded-lg shadow-lg text-center text-gray-500">
@@ -1948,14 +1986,34 @@
                 }
             };
 
+            // Log para debug - pode remover depois
+            console.log('VisualizarHolerite - Empresa:', empresa);
+            console.log('VisualizarHolerite - Funcionário:', funcionario);
+
             return (
                 <div className="bg-white p-6 rounded-lg shadow-lg">
+                    {!empresa && (
+                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                            <div className="flex">
+                                <div className="flex-shrink-0">
+                                    <i className="fas fa-exclamation-triangle text-yellow-400"></i>
+                                </div>
+                                <div className="ml-3">
+                                    <p className="text-sm text-yellow-700">
+                                        <strong>Atenção:</strong> Empresa não encontrada. Por favor, vincule o funcionário a uma empresa.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     <div className="border-b pb-4 mb-4">
                         <div className="flex justify-between items-start">
                             <div>
-                                <h3 className="text-2xl font-bold">{empresa?.razaoSocial || 'Empresa'}</h3>
-                                <p className="text-sm text-gray-600">{empresa?.endereco}, {empresa?.cidade}/{empresa?.estado}</p>
-                                <p className="text-sm text-gray-600">CNPJ: {empresa?.cnpj}</p>
+                                <h3 className="text-2xl font-bold">{empresa?.razaoSocial || '-'}</h3>
+                                {empresa?.endereco && empresa?.cidade && empresa?.estado && (
+                                    <p className="text-sm text-gray-600">{empresa.endereco}, {empresa.cidade}/{empresa.estado}</p>
+                                )}
+                                <p className="text-sm text-gray-600">CNPJ: {empresa?.cnpj || '-'}</p>
                             </div>
                             <div className="text-right">
                                 <p className="text-lg font-bold">RECIBO DE PAGAMENTO DE SALÁRIO</p>
@@ -2067,18 +2125,60 @@
             const [filtros, setFiltros] = useState({ funcionarioId: '', dataInicio: '', dataFim: '', empresaId: '' });
             const [editando, setEditando] = useState(null);
             const [mostrarForm, setMostrarForm] = useState(false);
+            const [registrando, setRegistrando] = useState(false);
 
             const registrarPonto = (tipo) => {
+                // Previne múltiplos cliques
+                if (registrando) {
+                    alert('Aguarde, processando registro...');
+                    return;
+                }
+
                 const agora = new Date();
+                const funcionarioId = usuarioLogado.tipo === 'admin' ? parseInt(filtros.funcionarioId) : usuarioLogado.id;
+                
+                // Validação: verifica se há registro duplicado nos últimos 2 minutos
+                const doisMinutosAtras = agora.getTime() - (2 * 60 * 1000);
+                const registroDuplicado = dados.registrosPonto.find(r => 
+                    r.funcionarioId === funcionarioId &&
+                    r.tipo === tipo &&
+                    r.data === dataRegistro &&
+                    r.timestamp > doisMinutosAtras
+                );
+
+                if (registroDuplicado) {
+                    alert(`Já existe um registro de "${tipo}" recente (${registroDuplicado.hora}). Aguarde alguns minutos para registrar novamente.`);
+                    return;
+                }
+
+                // Confirmação antes de registrar
+                const confirmar = confirm(`Confirmar registro de ponto?\n\nTipo: ${tipo}\nData: ${formatarData(dataRegistro)}\nHora: ${agora.toLocaleTimeString('pt-BR')}`);
+                
+                if (!confirmar) {
+                    return;
+                }
+
+                setRegistrando(true);
+
+                // Gera ID único usando timestamp + random para evitar duplicatas
+                const idUnico = `${agora.getTime()}_${Math.random().toString(36).substr(2, 9)}`;
+                
                 const novoRegistro = {
-                    id: Date.now(),
-                    funcionarioId: usuarioLogado.tipo === 'admin' ? parseInt(filtros.funcionarioId) : usuarioLogado.id,
+                    id: idUnico,
+                    funcionarioId,
                     tipo,
                     data: dataRegistro,
                     hora: agora.toLocaleTimeString('pt-BR'),
                     timestamp: agora.getTime()
                 };
+                
                 atualizar('registrosPonto', [...dados.registrosPonto, novoRegistro]);
+                
+                // Libera botão após 1 segundo
+                setTimeout(() => {
+                    setRegistrando(false);
+                    alert('Ponto registrado com sucesso!');
+                }, 1000);
             };
 
             const salvarEdicao = (registro) => {
@@ -2162,7 +2262,13 @@
 
             return (
                 <div>
-                    <h2 className="text-3xl font-bold mb-6">Registro de Jornada</h2>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-3xl font-bold">Registro de Jornada</h2>
+                        <div className="text-sm text-gray-500">
+                            <i className="fas fa-sync-alt mr-2"></i>
+                            Sincronização automática ativa
+                        </div>
+                    </div>
 
                     {usuarioLogado.tipo === 'admin' && (
                         <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
@@ -2199,7 +2305,13 @@
                         <FormRegistroPonto 
                             funcionarios={dados.funcionarios}
                             onSalvar={(reg) => {
-                                atualizar('registrosPonto', [...dados.registrosPonto, { ...reg, id: Date.now(), timestamp: new Date().getTime() }]);
+                                const timestamp = new Date().getTime();
+                                const idUnico = `${timestamp}_${Math.random().toString(36).substr(2, 9)}`;
+                                atualizar('registrosPonto', [...dados.registrosPonto, { 
+                                    ...reg, 
+                                    id: idUnico, 
+                                    timestamp 
+                                }]);
                                 setMostrarForm(false);
                             }}
                             onCancelar={() => setMostrarForm(false)}
@@ -2212,19 +2324,25 @@
                                 <h3 className="text-xl font-bold mb-4">Registrar Ponto</h3>
                                 <div className="mb-4">
                                     <label className="block mb-2 font-medium">Data</label>
-                                    <input type="date" value={dataRegistro} onChange={(e) => setDataRegistro(e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
+                                    <input type="date" value={dataRegistro} onChange={(e) => setDataRegistro(e.target.value)} className="w-full px-4 py-2 border rounded-lg" disabled={registrando} />
                                 </div>
+                                {registrando && (
+                                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-center">
+                                        <i className="fas fa-spinner fa-spin mr-2"></i>
+                                        Processando registro...
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-2 gap-4">
-                                    <button onClick={() => registrarPonto('Entrada')} className="bg-green-600 text-white px-6 py-4 rounded-lg hover:bg-green-700">
+                                    <button onClick={() => registrarPonto('Entrada')} disabled={registrando} className={`px-6 py-4 rounded-lg ${registrando ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white`}>
                                         <i className="fas fa-sign-in-alt text-2xl mb-2 block"></i>Entrada
                                     </button>
-                                    <button onClick={() => registrarPonto('Saída Intervalo')} className="bg-yellow-600 text-white px-6 py-4 rounded-lg hover:bg-yellow-700">
+                                    <button onClick={() => registrarPonto('Saída Intervalo')} disabled={registrando} className={`px-6 py-4 rounded-lg ${registrando ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-600 hover:bg-yellow-700'} text-white`}>
                                         <i className="fas fa-utensils text-2xl mb-2 block"></i>Saída Intervalo
                                     </button>
-                                    <button onClick={() => registrarPonto('Retorno Intervalo')} className="bg-primary-500 text-white px-6 py-4 rounded-lg hover:bg-primary-600">
+                                    <button onClick={() => registrarPonto('Retorno Intervalo')} disabled={registrando} className={`px-6 py-4 rounded-lg ${registrando ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-500 hover:bg-primary-600'} text-white`}>
                                         <i className="fas fa-undo text-2xl mb-2 block"></i>Retorno
                                     </button>
-                                    <button onClick={() => registrarPonto('Saída')} className="bg-red-600 text-white px-6 py-4 rounded-lg hover:bg-red-700">
+                                    <button onClick={() => registrarPonto('Saída')} disabled={registrando} className={`px-6 py-4 rounded-lg ${registrando ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'} text-white`}>
                                         <i className="fas fa-sign-out-alt text-2xl mb-2 block"></i>Saída
                                     </button>
                                 </div>
