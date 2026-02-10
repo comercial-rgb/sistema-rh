@@ -554,22 +554,17 @@
             // Salva dados no Firebase quando alterados
             useEffect(() => {
                 if (usuarioLogado && !carregando) {
-                    // Adiciona debounce para não salvar excessivamente
-                    const timeoutId = setTimeout(() => {
-                        FirebaseStorage.saveAll(dados)
-                            .then(() => {
-                                // Mantém backup local também
-                                Storage.save('sistemaRH_v2', dados);
-                                console.log('Dados salvos com sucesso:', new Date().toISOString());
-                            })
-                            .catch(error => {
-                                console.error('Erro ao salvar dados:', error);
-                                // Salva no localStorage como fallback
-                                Storage.save('sistemaRH_v2', dados);
-                            });
-                    }, 1000); // Aguarda 1 segundo antes de salvar
-
-                    return () => clearTimeout(timeoutId);
+                    // Salva imediatamente sem debounce
+                    FirebaseStorage.saveAll(dados)
+                        .then(() => {
+                            // Mantém backup local também
+                            Storage.save('sistemaRH_v2', dados);
+                        })
+                        .catch(error => {
+                            console.error('Erro ao salvar dados:', error);
+                            // Salva no localStorage como fallback
+                            Storage.save('sistemaRH_v2', dados);
+                        });
                 }
             }, [dados, usuarioLogado, carregando]);
 
@@ -606,6 +601,16 @@
             const precisaDefinirSenha = usuarioLogado.tipo === 'funcionario'
                 && funcionarioLogado
                 && funcionarioLogado.senhaPersonalizada !== true;
+
+            // Debug: mostra status da senha
+            if (usuarioLogado.tipo === 'funcionario' && funcionarioLogado) {
+                console.log('🔐 Status senha personalizada:', {
+                    funcionarioId: funcionarioLogado.id,
+                    nome: funcionarioLogado.nome,
+                    senhaPersonalizada: funcionarioLogado.senhaPersonalizada,
+                    precisaDefinir: precisaDefinirSenha
+                });
+            }
 
             if (precisaDefinirSenha) {
                 return (
@@ -788,33 +793,45 @@
 
                 setSalvando(true);
                 try {
-                    // Atualiza os dados localmente
-                    const funcionariosAtualizados = (dados.funcionarios || []).map(f =>
+                    // Atualiza os dados do funcionário com a senha personalizada
+                    const funcionariosAtualizados = dados.funcionarios.map(f =>
                         f.id === usuarioLogado.id
                             ? { ...f, senhaPersonalizada: true, senha: senhaTrim }
                             : f
                     );
                     
-                    // Atualiza o estado local
-                    atualizar('funcionarios', funcionariosAtualizados);
+                    // Cria objeto completo com dados atualizados
+                    const dadosCompletos = { 
+                        ...dados, 
+                        funcionarios: funcionariosAtualizados 
+                    };
                     
-                    // Salva IMEDIATAMENTE no Firebase (sem debounce)
-                    const dadosAtualizados = { ...dados, funcionarios: funcionariosAtualizados };
-                    await FirebaseStorage.saveAll(dadosAtualizados);
+                    // Salva no Firebase primeiro
+                    const sucessoFirebase = await FirebaseStorage.saveAll(dadosCompletos);
                     
-                    // Também salva no localStorage como backup
-                    Storage.save('sistemaRH_v2', dadosAtualizados);
+                    // Salva no localStorage como backup
+                    Storage.save('sistemaRH_v2', dadosCompletos);
                     
-                    console.log('✅ Senha salva com sucesso no Firebase e localStorage');
-                    
-                    // Aguarda 500ms para garantir persistência antes de continuar
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    
-                    onDone && onDone();
+                    if (sucessoFirebase) {
+                        console.log('✅ Senha personalizada salva com sucesso!');
+                        
+                        // Atualiza o estado local por último
+                        atualizar('funcionarios', funcionariosAtualizados);
+                        
+                        // Limpa a sessão antiga para forçar uso dos dados atualizados
+                        Storage.save('sistemaRH_sessao', null);
+                        
+                        // Aguarda para garantir que foi salvo
+                        setTimeout(() => {
+                            alert('Senha definida com sucesso! Você será redirecionado.');
+                            onDone && onDone();
+                        }, 500);
+                    } else {
+                        throw new Error('Falha ao salvar no Firebase');
+                    }
                 } catch (error) {
                     console.error('❌ Erro ao salvar senha:', error);
                     setErro('Erro ao salvar senha. Tente novamente.');
-                } finally {
                     setSalvando(false);
                 }
             };
@@ -1510,9 +1527,19 @@
 
             const salvarFuncionario = (funcionario) => {
                 if (funcionarioEditando) {
+                    // Editando: mantém senhaPersonalizada existente
                     atualizar('funcionarios', dados.funcionarios.map(f => f.id === funcionario.id ? funcionario : f));
                 } else {
-                    atualizar('funcionarios', [...dados.funcionarios, { ...funcionario, id: Date.now() }]);
+                    // Novo funcionário: inicializa com senhaPersonalizada como false
+                    const novoFuncionario = {
+                        ...funcionario,
+                        id: Date.now(),
+                        senhaPersonalizada: false,
+                        senha: null,
+                        acessoAtivo: true
+                    };
+                    console.log('➕ Novo funcionário criado:', novoFuncionario.nome, '- senhaPersonalizada:', false);
+                    atualizar('funcionarios', [...dados.funcionarios, novoFuncionario]);
                 }
                 setMostrarForm(false);
                 setFuncionarioEditando(null);
@@ -2233,43 +2260,50 @@
             const [filtros, setFiltros] = useState({ funcionarioId: '', dataInicio: '', dataFim: '', empresaId: '' });
             const [editando, setEditando] = useState(null);
             const [mostrarForm, setMostrarForm] = useState(false);
-            const [registrando, setRegistrando] = useState(false);
+            const [processando, setProcessando] = useState(false);
 
             const registrarPonto = (tipo) => {
-                // Previne múltiplos cliques
-                if (registrando) {
-                    alert('Aguarde, processando registro...');
+                // Bloqueia se já estiver processando
+                if (processando) {
                     return;
                 }
 
                 const agora = new Date();
+                const timestamp = agora.getTime();
                 const funcionarioId = usuarioLogado.tipo === 'admin' ? parseInt(filtros.funcionarioId) : usuarioLogado.id;
                 
-                // Validação: verifica se há registro duplicado nos últimos 2 minutos
-                const doisMinutosAtras = agora.getTime() - (2 * 60 * 1000);
-                const registroDuplicado = dados.registrosPonto.find(r => 
+                // 🔒 VALIDAÇÃO ANTI-DUPLICAÇÃO: Verifica registros do mesmo tipo nos últimos 2 minutos
+                const doisMinutosAtras = timestamp - (2 * 60 * 1000);
+                const registroRecente = dados.registrosPonto.find(r => 
                     r.funcionarioId === funcionarioId &&
                     r.tipo === tipo &&
                     r.data === dataRegistro &&
                     r.timestamp > doisMinutosAtras
                 );
 
-                if (registroDuplicado) {
-                    alert(`Já existe um registro de "${tipo}" recente (${registroDuplicado.hora}). Aguarde alguns minutos para registrar novamente.`);
+                if (registroRecente) {
+                    alert(`❌ Já existe um registro de "${tipo}" recente às ${registroRecente.hora}.\n\nAguarde pelo menos 2 minutos antes de registrar novamente o mesmo tipo de ponto.`);
                     return;
                 }
 
-                // Confirmação antes de registrar
-                const confirmar = confirm(`Confirmar registro de ponto?\n\nTipo: ${tipo}\nData: ${formatarData(dataRegistro)}\nHora: ${agora.toLocaleTimeString('pt-BR')}`);
-                
+                // 🔒 CONFIRMAÇÃO OBRIGATÓRIA
+                const confirmar = confirm(
+                    `Confirmar registro de ponto?\n\n` +
+                    `Tipo: ${tipo}\n` +
+                    `Data: ${formatarData(dataRegistro)}\n` +
+                    `Hora: ${agora.toLocaleTimeString('pt-BR')}\n\n` +
+                    `Clique em OK para confirmar ou Cancelar para voltar.`
+                );
+
                 if (!confirmar) {
                     return;
                 }
 
-                setRegistrando(true);
-
-                // Gera ID único usando timestamp + random para evitar duplicatas
-                const idUnico = `${agora.getTime()}_${Math.random().toString(36).substr(2, 9)}`;
+                // 🔒 BLOQUEIA BOTÕES durante processamento
+                setProcessando(true);
+                
+                // Gera ID único combinando timestamp com número aleatório
+                const idUnico = `${timestamp}_${Math.floor(Math.random() * 1000000)}`;
                 
                 const novoRegistro = {
                     id: idUnico,
@@ -2277,15 +2311,20 @@
                     tipo,
                     data: dataRegistro,
                     hora: agora.toLocaleTimeString('pt-BR'),
-                    timestamp: agora.getTime()
+                    timestamp
                 };
                 
+                // Adiciona o registro
                 atualizar('registrosPonto', [...dados.registrosPonto, novoRegistro]);
                 
-                // Libera botão após 1 segundo
+                // Mensagem de sucesso
+                alert('✅ Ponto registrado com sucesso!\n\n' +
+                      `Tipo: ${tipo}\n` +
+                      `Hora: ${novoRegistro.hora}`);
+                
+                // Desbloqueia botões após 1 segundo
                 setTimeout(() => {
-                    setRegistrando(false);
-                    alert('Ponto registrado com sucesso!');
+                    setProcessando(false);
                 }, 1000);
             };
 
@@ -2370,13 +2409,7 @@
 
             return (
                 <div>
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-3xl font-bold">Registro de Jornada</h2>
-                        <div className="text-sm text-gray-500">
-                            <i className="fas fa-sync-alt mr-2"></i>
-                            Sincronização automática ativa
-                        </div>
-                    </div>
+                    <h2 className="text-3xl font-bold mb-6">Registro de Jornada</h2>
 
                     {usuarioLogado.tipo === 'admin' && (
                         <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
@@ -2414,7 +2447,7 @@
                             funcionarios={dados.funcionarios}
                             onSalvar={(reg) => {
                                 const timestamp = new Date().getTime();
-                                const idUnico = `${timestamp}_${Math.random().toString(36).substr(2, 9)}`;
+                                const idUnico = `${timestamp}_${Math.floor(Math.random() * 1000000)}`;
                                 atualizar('registrosPonto', [...dados.registrosPonto, { 
                                     ...reg, 
                                     id: idUnico, 
@@ -2430,28 +2463,54 @@
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                             <div className="bg-white p-6 rounded-lg shadow-lg">
                                 <h3 className="text-xl font-bold mb-4">Registrar Ponto</h3>
-                                <div className="mb-4">
-                                    <label className="block mb-2 font-medium">Data</label>
-                                    <input type="date" value={dataRegistro} onChange={(e) => setDataRegistro(e.target.value)} className="w-full px-4 py-2 border rounded-lg" disabled={registrando} />
-                                </div>
-                                {registrando && (
-                                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 text-center">
+                                {processando && (
+                                    <div className="mb-4 p-3 bg-blue-100 text-blue-700 rounded-lg text-sm flex items-center">
                                         <i className="fas fa-spinner fa-spin mr-2"></i>
-                                        Processando registro...
+                                        Processando registro... Aguarde.
                                     </div>
                                 )}
+                                <div className="mb-4">
+                                    <label className="block mb-2 font-medium">Data</label>
+                                    <input 
+                                        type="date" 
+                                        value={dataRegistro} 
+                                        onChange={(e) => setDataRegistro(e.target.value)} 
+                                        className="w-full px-4 py-2 border rounded-lg"
+                                        disabled={processando}
+                                    />
+                                </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <button onClick={() => registrarPonto('Entrada')} disabled={registrando} className={`px-6 py-4 rounded-lg ${registrando ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'} text-white`}>
-                                        <i className="fas fa-sign-in-alt text-2xl mb-2 block"></i>Entrada
+                                    <button 
+                                        onClick={() => registrarPonto('Entrada')} 
+                                        disabled={processando}
+                                        className={`px-6 py-4 rounded-lg text-white ${processando ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}
+                                    >
+                                        <i className="fas fa-sign-in-alt text-2xl mb-2 block"></i>
+                                        {processando ? 'Aguarde...' : 'Entrada'}
                                     </button>
-                                    <button onClick={() => registrarPonto('Saída Intervalo')} disabled={registrando} className={`px-6 py-4 rounded-lg ${registrando ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-600 hover:bg-yellow-700'} text-white`}>
-                                        <i className="fas fa-utensils text-2xl mb-2 block"></i>Saída Intervalo
+                                    <button 
+                                        onClick={() => registrarPonto('Saída Intervalo')} 
+                                        disabled={processando}
+                                        className={`px-6 py-4 rounded-lg text-white ${processando ? 'bg-gray-400 cursor-not-allowed' : 'bg-yellow-600 hover:bg-yellow-700'}`}
+                                    >
+                                        <i className="fas fa-utensils text-2xl mb-2 block"></i>
+                                        {processando ? 'Aguarde...' : 'Saída Intervalo'}
                                     </button>
-                                    <button onClick={() => registrarPonto('Retorno Intervalo')} disabled={registrando} className={`px-6 py-4 rounded-lg ${registrando ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-500 hover:bg-primary-600'} text-white`}>
-                                        <i className="fas fa-undo text-2xl mb-2 block"></i>Retorno
+                                    <button 
+                                        onClick={() => registrarPonto('Retorno Intervalo')} 
+                                        disabled={processando}
+                                        className={`px-6 py-4 rounded-lg text-white ${processando ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary-500 hover:bg-primary-600'}`}
+                                    >
+                                        <i className="fas fa-undo text-2xl mb-2 block"></i>
+                                        {processando ? 'Aguarde...' : 'Retorno'}
                                     </button>
-                                    <button onClick={() => registrarPonto('Saída')} disabled={registrando} className={`px-6 py-4 rounded-lg ${registrando ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'} text-white`}>
-                                        <i className="fas fa-sign-out-alt text-2xl mb-2 block"></i>Saída
+                                    <button 
+                                        onClick={() => registrarPonto('Saída')} 
+                                        disabled={processando}
+                                        className={`px-6 py-4 rounded-lg text-white ${processando ? 'bg-gray-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}`}
+                                    >
+                                        <i className="fas fa-sign-out-alt text-2xl mb-2 block"></i>
+                                        {processando ? 'Aguarde...' : 'Saída'}
                                     </button>
                                 </div>
                             </div>
