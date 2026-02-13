@@ -307,6 +307,12 @@
         };
 
         // Sistema de armazenamento Firebase Firestore
+        // 🔒 Fila de salvamento para evitar race conditions
+        let _saveQueue = Promise.resolve();
+        let _saveTimer = null;
+        let _pendingData = null;
+        let _saveVersion = 0;
+
         const FirebaseStorage = {
             // Salva dados em uma coleção do Firestore
             saveCollection: async (collection, data) => {
@@ -333,19 +339,49 @@
                     return defaultValue;
                 }
             },
-            // Salva todos os dados do sistema
+            // Salva todos os dados do sistema com fila sequencial e retry
             saveAll: async (dados) => {
-                try {
-                    const docRef = db.collection('sistemaRH').doc('dados');
-                    await docRef.set({ 
-                        ...dados, 
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
-                    });
-                    return true;
-                } catch (e) {
-                    console.error('Erro ao salvar dados:', e);
+                const currentVersion = ++_saveVersion;
+                const executarSave = async () => {
+                    // Se já existe uma versão mais recente pendente, pula esta
+                    if (currentVersion < _saveVersion) {
+                        console.log('⏭️ Salvamento ignorado (versão mais recente pendente)');
+                        return true;
+                    }
+                    const maxRetries = 3;
+                    for (let tentativa = 1; tentativa <= maxRetries; tentativa++) {
+                        try {
+                            const docRef = db.collection('sistemaRH').doc('dados');
+                            await docRef.set({ 
+                                ...dados, 
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+                            });
+                            console.log('✅ Dados salvos no Firebase (v' + currentVersion + ')');
+                            return true;
+                        } catch (e) {
+                            console.error(`❌ Tentativa ${tentativa}/${maxRetries} falhou:`, e);
+                            if (tentativa < maxRetries) {
+                                await new Promise(r => setTimeout(r, 1000 * tentativa));
+                            }
+                        }
+                    }
+                    console.error('❌ Falha definitiva ao salvar no Firebase após ' + maxRetries + ' tentativas');
                     return false;
-                }
+                };
+                // Enfileira o salvamento para execução sequencial
+                _saveQueue = _saveQueue.then(executarSave).catch(executarSave);
+                return _saveQueue;
+            },
+            // Salva com debounce (agrupa mudanças rápidas)
+            saveAllDebounced: (dados, callback) => {
+                _pendingData = dados;
+                if (_saveTimer) clearTimeout(_saveTimer);
+                _saveTimer = setTimeout(async () => {
+                    const dataToSave = _pendingData;
+                    _pendingData = null;
+                    const result = await FirebaseStorage.saveAll(dataToSave);
+                    if (callback) callback(result, dataToSave);
+                }, 500); // Aguarda 500ms para agrupar mudanças rápidas
             },
             // Carrega todos os dados do sistema
             loadAll: async (defaultValue) => {
@@ -551,25 +587,28 @@
                 carregarDados();
             }, []);
 
-            // Salva dados no Firebase quando alterados
+            // Salva dados no Firebase quando alterados (com debounce para evitar race conditions)
             useEffect(() => {
                 if (usuarioLogado && !carregando) {
-                    // Salva imediatamente sem debounce
-                    FirebaseStorage.saveAll(dados)
-                        .then(() => {
-                            // Mantém backup local também
-                            Storage.save('sistemaRH_v2', dados);
-                        })
-                        .catch(error => {
-                            console.error('Erro ao salvar dados:', error);
-                            // Salva no localStorage como fallback
-                            Storage.save('sistemaRH_v2', dados);
-                        });
+                    // Sempre salva no localStorage imediatamente (síncrono, não perde dados)
+                    Storage.save('sistemaRH_v2', dados);
+                    
+                    // Salva no Firebase com debounce para agrupar mudanças rápidas
+                    FirebaseStorage.saveAllDebounced(dados, (sucesso, dadosSalvos) => {
+                        if (!sucesso) {
+                            console.error('⚠️ Falha ao salvar no Firebase - dados preservados no localStorage');
+                        }
+                    });
                 }
             }, [dados, usuarioLogado, carregando]);
 
             const atualizarDados = (campo, valor) => {
-                setDados(prev => ({ ...prev, [campo]: valor }));
+                // Suporta valor direto OU função (para evitar dados obsoletos/stale closure)
+                // Uso: atualizar('registrosPonto', prev => [...prev, novoRegistro])
+                setDados(prev => ({
+                    ...prev,
+                    [campo]: typeof valor === 'function' ? valor(prev[campo]) : valor
+                }));
             };
 
             const avisosNaoLidos = dados.avisos.filter(a => 
@@ -2274,7 +2313,8 @@
                 
                 // 🔒 VALIDAÇÃO ANTI-DUPLICAÇÃO: Verifica registros do mesmo tipo nos últimos 2 minutos
                 const doisMinutosAtras = timestamp - (2 * 60 * 1000);
-                const registroRecente = dados.registrosPonto.find(r => 
+                const registrosPontoAtual = dados.registrosPonto || [];
+                const registroRecente = registrosPontoAtual.find(r => 
                     r.funcionarioId === funcionarioId &&
                     r.tipo === tipo &&
                     r.data === dataRegistro &&
@@ -2314,8 +2354,8 @@
                     timestamp
                 };
                 
-                // Adiciona o registro
-                atualizar('registrosPonto', [...dados.registrosPonto, novoRegistro]);
+                // Adiciona o registro usando updater funcional para evitar dados obsoletos
+                atualizar('registrosPonto', prev => [...prev, novoRegistro]);
                 
                 // Mensagem de sucesso
                 alert('✅ Ponto registrado com sucesso!\n\n' +
@@ -2329,13 +2369,13 @@
             };
 
             const salvarEdicao = (registro) => {
-                atualizar('registrosPonto', dados.registrosPonto.map(r => r.id === registro.id ? registro : r));
+                atualizar('registrosPonto', prev => prev.map(r => r.id === registro.id ? registro : r));
                 setEditando(null);
             };
 
             const excluirRegistro = (id) => {
                 if (confirm('Excluir este registro?')) {
-                    atualizar('registrosPonto', dados.registrosPonto.filter(r => r.id !== id));
+                    atualizar('registrosPonto', prev => prev.filter(r => r.id !== id));
                 }
             };
 
@@ -2448,7 +2488,7 @@
                             onSalvar={(reg) => {
                                 const timestamp = new Date().getTime();
                                 const idUnico = `${timestamp}_${Math.floor(Math.random() * 1000000)}`;
-                                atualizar('registrosPonto', [...dados.registrosPonto, { 
+                                atualizar('registrosPonto', prev => [...prev, { 
                                     ...reg, 
                                     id: idUnico, 
                                     timestamp 
