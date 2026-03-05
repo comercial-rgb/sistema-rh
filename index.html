@@ -436,13 +436,23 @@
         const Storage = {
             save: (key, data) => {
                 try {
-                    // Cria backup antes de salvar
-                    Storage.createBackup(key, data);
                     localStorage.setItem(key, JSON.stringify(data));
                     return true;
                 } catch (e) {
-                    console.error('Erro ao salvar:', e);
-                    return false;
+                    console.error('Erro ao salvar no localStorage:', e);
+                    // Tenta liberar espaço removendo backups antigos
+                    try {
+                        const backups = Object.keys(localStorage).filter(k => k.startsWith(`${key}_backup_`));
+                        backups.sort().forEach(k => localStorage.removeItem(k));
+                        // Tenta novamente após limpar
+                        localStorage.setItem(key, JSON.stringify(data));
+                        console.log('✅ Salvamento recuperado após limpar backups');
+                        return true;
+                    } catch (e2) {
+                        console.error('❌ Falha definitiva ao salvar no localStorage:', e2);
+                        alert('⚠️ ATENÇÃO: Não foi possível salvar os dados localmente (armazenamento cheio).\n\nOs dados serão salvos apenas no servidor.\nNão feche o navegador até confirmar que os dados foram salvos.');
+                        return false;
+                    }
                 }
             },
             load: (key, defaultValue = null) => {
@@ -456,16 +466,32 @@
             },
             createBackup: (key, data) => {
                 try {
+                    // Remove arquivos base64 dos backups para economizar espaço
+                    const dadosLeves = JSON.parse(JSON.stringify(data));
+                    const colecoes = ['holerites', 'informesRendimentos', 'documentos'];
+                    colecoes.forEach(col => {
+                        if (Array.isArray(dadosLeves[col])) {
+                            dadosLeves[col] = dadosLeves[col].map(item => {
+                                const limpo = { ...item };
+                                delete limpo.arquivoBase64;
+                                return limpo;
+                            });
+                        }
+                    });
                     const timestamp = new Date().toISOString();
                     const backupKey = `${key}_backup_${timestamp}`;
-                    localStorage.setItem(backupKey, JSON.stringify(data));
+                    localStorage.setItem(backupKey, JSON.stringify(dadosLeves));
                     
-                    // Mantém apenas os últimos 10 backups
+                    // Mantém apenas os últimos 3 backups
                     const backups = Object.keys(localStorage).filter(k => k.startsWith(`${key}_backup_`));
-                    if (backups.length > 10) {
-                        backups.sort().slice(0, backups.length - 10).forEach(k => localStorage.removeItem(k));
+                    if (backups.length > 3) {
+                        backups.sort().slice(0, backups.length - 3).forEach(k => localStorage.removeItem(k));
                     }
                 } catch (e) {
+                    // Se falhar, limpa todos os backups para liberar espaço
+                    try {
+                        Object.keys(localStorage).filter(k => k.startsWith(`${key}_backup_`)).forEach(k => localStorage.removeItem(k));
+                    } catch(e2) { /* ignora */ }
                     console.warn('Erro ao criar backup:', e);
                 }
             },
@@ -619,6 +645,8 @@
                         setDados(dadosParaCarregar);
                         // Salva no localStorage como backup
                         Storage.save('sistemaRH_v2', dadosParaCarregar);
+                        // Cria backup seguro uma vez por sessão
+                        Storage.createBackup('sistemaRH_v2', dadosParaCarregar);
                         
                     } catch (error) {
                         console.error('❌ Erro ao carregar dados do Firebase:', error);
@@ -647,7 +675,14 @@
             useEffect(() => {
                 if (usuarioLogado && !carregando) {
                     // Sempre salva no localStorage imediatamente (síncrono, não perde dados)
-                    Storage.save('sistemaRH_v2', dados);
+                    const salvoLocal = Storage.save('sistemaRH_v2', dados);
+                    
+                    if (!salvoLocal) {
+                        // Se localStorage falhou, força Firebase imediato
+                        console.warn('⚠️ localStorage falhou, forçando Firebase imediato');
+                        FirebaseStorage.saveAll(dados);
+                        return;
+                    }
                     
                     // Salva no Firebase com debounce para agrupar mudanças rápidas
                     FirebaseStorage.saveAllDebounced(dados, (sucesso, dadosSalvos) => {
@@ -1960,12 +1995,28 @@
             const holeriteFiltrado = dados.holerites.find(h => parseInt(h.funcionarioId) === parseInt(funcionarioSelecionado) && parseInt(h.mes) === parseInt(mes) && parseInt(h.ano) === parseInt(ano));
 
             const salvarHolerite = (holerite) => {
-                const existe = dados.holerites.find(h => parseInt(h.funcionarioId) === parseInt(holerite.funcionarioId) && parseInt(h.mes) === parseInt(holerite.mes) && parseInt(h.ano) === parseInt(holerite.ano));
-                if (existe) {
-                    atualizar('holerites', dados.holerites.map(h => h.id === existe.id ? { ...holerite, id: existe.id } : h));
-                } else {
-                    atualizar('holerites', [...dados.holerites, { ...holerite, id: Date.now() }]);
-                }
+                // Usa updater funcional para evitar stale closure
+                atualizar('holerites', prev => {
+                    const holeritesPrev = prev || [];
+                    const existe = holeritesPrev.find(h => parseInt(h.funcionarioId) === parseInt(holerite.funcionarioId) && parseInt(h.mes) === parseInt(holerite.mes) && parseInt(h.ano) === parseInt(holerite.ano));
+                    if (existe) {
+                        return holeritesPrev.map(h => h.id === existe.id ? { ...holerite, id: existe.id } : h);
+                    } else {
+                        return [...holeritesPrev, { ...holerite, id: Date.now() }];
+                    }
+                });
+                // Força salvamento imediato no Firebase (sem esperar debounce)
+                setTimeout(() => {
+                    try {
+                        const dadosAtuais = JSON.parse(localStorage.getItem('sistemaRH_v2'));
+                        if (dadosAtuais) {
+                            FirebaseStorage.saveAll(dadosAtuais);
+                            console.log('💾 Holerite salvo imediatamente no Firebase');
+                        }
+                    } catch(e) {
+                        console.error('⚠️ Erro ao forçar salvamento do holerite:', e);
+                    }
+                }, 200);
                 setMostrarForm(false);
             };
 
@@ -2390,12 +2441,22 @@
             const informeFiltrado = informes.find(inf => parseInt(inf.funcionarioId) === parseInt(funcionarioSelecionado) && parseInt(inf.anoBase) === parseInt(anoBase));
 
             const salvarInforme = (informe) => {
-                const existe = informes.find(inf => parseInt(inf.funcionarioId) === parseInt(informe.funcionarioId) && parseInt(inf.anoBase) === parseInt(informe.anoBase));
-                if (existe) {
-                    atualizar('informesRendimentos', informes.map(inf => inf.id === existe.id ? { ...informe, id: existe.id } : inf));
-                } else {
-                    atualizar('informesRendimentos', [...informes, { ...informe, id: Date.now() }]);
-                }
+                atualizar('informesRendimentos', prev => {
+                    const informesPrev = prev || [];
+                    const existe = informesPrev.find(inf => parseInt(inf.funcionarioId) === parseInt(informe.funcionarioId) && parseInt(inf.anoBase) === parseInt(informe.anoBase));
+                    if (existe) {
+                        return informesPrev.map(inf => inf.id === existe.id ? { ...informe, id: existe.id } : inf);
+                    } else {
+                        return [...informesPrev, { ...informe, id: Date.now() }];
+                    }
+                });
+                // Força salvamento imediato no Firebase
+                setTimeout(() => {
+                    try {
+                        const dadosAtuais = JSON.parse(localStorage.getItem('sistemaRH_v2'));
+                        if (dadosAtuais) FirebaseStorage.saveAll(dadosAtuais);
+                    } catch(e) { console.error('Erro ao salvar informe:', e); }
+                }, 200);
                 setMostrarForm(false);
             };
 
