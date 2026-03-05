@@ -401,6 +401,37 @@
             }
         };
 
+        // Utilitário: merge inteligente de arrays por ID (evita perda de dados)
+        const mergeArraysPorId = (arr1, arr2, key = 'id') => {
+            const map = new Map();
+            [...(arr1 || []), ...(arr2 || [])].forEach(item => {
+                if (item && item[key] != null) {
+                    // Usa o item mais recente (se tiver timestamp) ou o último encontrado
+                    const existing = map.get(String(item[key]));
+                    if (!existing || (item.timestamp && existing.timestamp && item.timestamp > existing.timestamp)) {
+                        map.set(String(item[key]), item);
+                    }
+                }
+            });
+            return Array.from(map.values());
+        };
+
+        // Handler para salvar dados pendentes ao fechar a página
+        window.addEventListener('beforeunload', () => {
+            if (_pendingData) {
+                // Força salvamento no localStorage antes de fechar
+                try {
+                    localStorage.setItem('sistemaRH_v2', JSON.stringify(_pendingData));
+                    console.log('💾 Dados pendentes salvos no localStorage antes de fechar');
+                } catch(e) { /* ignora */ }
+                // Tenta enviar pro Firebase via sendBeacon (melhor esforço)
+                try {
+                    const url = `https://firestore.googleapis.com/v1/projects/sistema-rh-instasolutions/databases/(default)/documents/sistemaRH/dados`;
+                    // sendBeacon não funciona com Firestore SDK, mas ao menos o localStorage foi salvo
+                } catch(e) { /* ignora */ }
+            }
+        });
+
         // Sistema de armazenamento local (fallback)
         const Storage = {
             save: (key, data) => {
@@ -479,6 +510,7 @@
                 avisos: [],
                 registrosPonto: [],
                 holerites: [],
+                informesRendimentos: [],
                 solicitacoesFerias: [],
                 historicoFerias: [],
                 feriadosPontoFacultativo: [],
@@ -519,6 +551,7 @@
                             avisos: [],
                             registrosPonto: [],
                             holerites: [],
+                            informesRendimentos: [],
                             solicitacoesFerias: [],
                             historicoFerias: [],
                             feriadosPontoFacultativo: [],
@@ -545,10 +578,32 @@
                         console.log('🔍 Firebase tem dados:', firebaseTemDados);
                         console.log('🔍 Local tem dados:', localTemDados);
                         
-                        // Decide qual fonte usar
+                        // Decide qual fonte usar COM MERGE INTELIGENTE
                         let dadosParaCarregar;
                         
-                        if (firebaseTemDados) {
+                        if (firebaseTemDados && localTemDados) {
+                            // MERGE: combina dados do Firebase + localStorage para não perder registros
+                            console.log('🔄 Mesclando dados Firebase + localStorage');
+                            const colecoes = ['empresas', 'funcionarios', 'avisos', 'registrosPonto', 
+                                'holerites', 'informesRendimentos', 'solicitacoesFerias', 'historicoFerias', 
+                                'feriadosPontoFacultativo', 'documentos', 'planosSaude'];
+                            dadosParaCarregar = { ...dadosFirebase };
+                            colecoes.forEach(col => {
+                                if (Array.isArray(dadosFirebase[col]) || Array.isArray(dadosLocal[col])) {
+                                    dadosParaCarregar[col] = mergeArraysPorId(
+                                        dadosFirebase[col], 
+                                        dadosLocal[col]
+                                    );
+                                }
+                            });
+                            // Se o merge resultou em dados a mais que o Firebase, sincroniza
+                            const firebaseCount = colecoes.reduce((sum, col) => sum + (dadosFirebase[col]?.length || 0), 0);
+                            const mergeCount = colecoes.reduce((sum, col) => sum + (dadosParaCarregar[col]?.length || 0), 0);
+                            if (mergeCount > firebaseCount) {
+                                console.log(`📤 Merge recuperou ${mergeCount - firebaseCount} registros do localStorage → sincronizando Firebase`);
+                                FirebaseStorage.saveAll(dadosParaCarregar);
+                            }
+                        } else if (firebaseTemDados) {
                             console.log('✅ Usando dados do Firebase');
                             dadosParaCarregar = dadosFirebase;
                         } else if (localTemDados) {
@@ -574,6 +629,7 @@
                             avisos: [],
                             registrosPonto: [],
                             holerites: [],
+                            informesRendimentos: [],
                             solicitacoesFerias: [],
                             historicoFerias: [],
                             feriadosPontoFacultativo: [],
@@ -711,6 +767,9 @@
                             )}
                             {paginaAtual === 'informacoes' && (
                                 <Informacoes />
+                            )}
+                            {paginaAtual === 'informes' && (
+                                <InformesRendimentos dados={dados} atualizar={atualizarDados} usuarioLogado={usuarioLogado} />
                             )}
                             {paginaAtual === 'acessos' && (
                                 <GestaoAcessos dados={dados} atualizar={atualizarDados} usuarioLogado={usuarioLogado} />
@@ -963,6 +1022,7 @@
                 { id: 'empresas', icon: 'building', label: 'Empresas' },
                 { id: 'funcionarios', icon: 'users', label: 'Funcionários' },
                 { id: 'rendimentos', icon: 'money-bill-wave', label: 'Rendimentos' },
+                { id: 'informes', icon: 'file-invoice', label: 'Informes de Rendimentos' },
                 { id: 'jornada', icon: 'clock', label: 'Jornada' },
                 { id: 'ferias', icon: 'umbrella-beach', label: 'Férias' },
                 { id: 'feriados', icon: 'calendar-alt', label: 'Feriados' },
@@ -975,6 +1035,7 @@
             ] : [
                 { id: 'dashboard', icon: 'chart-line', label: 'Início' },
                 { id: 'rendimentos', icon: 'money-bill-wave', label: 'Holerites' },
+                { id: 'informes', icon: 'file-invoice', label: 'Informes de Rendimentos' },
                 { id: 'jornada', icon: 'clock', label: 'Meu Ponto' },
                 { id: 'ferias', icon: 'umbrella-beach', label: 'Férias' },
                 { id: 'feriados', icon: 'calendar-alt', label: 'Feriados' },
@@ -1048,6 +1109,7 @@
                 const feriasInfo = calcularDiasFerias(meusDados.dataAdmissao);
                 const meusHolerites = dados.holerites.filter(h => h.funcionarioId === usuarioLogado.id);
                 const meusRegistros = dados.registrosPonto.filter(r => r.funcionarioId === usuarioLogado.id);
+                const meusInformes = (dados.informesRendimentos || []).filter(inf => parseInt(inf.funcionarioId) === parseInt(usuarioLogado.id));
 
                 return (
                     <div>
@@ -1077,7 +1139,7 @@
                                     <p className="text-gray-500 text-center py-4">Nenhum holerite cadastrado</p>
                                 ) : (
                                     <div className="space-y-2">
-                                        {meusHolerites.slice(-3).reverse().map((h, i) => (
+                                        {[...meusHolerites].sort((a, b) => { if (parseInt(b.ano) !== parseInt(a.ano)) return parseInt(b.ano) - parseInt(a.ano); return parseInt(b.mes) - parseInt(a.mes); }).slice(0, 3).map((h, i) => (
                                             <div key={i} className="p-3 bg-gray-50 rounded flex justify-between">
                                                 <span>{h.mes}/{h.ano}</span>
                                                 <span className="font-bold text-green-600">{formatarMoeda(h.salarioLiquido)}</span>
@@ -1106,6 +1168,24 @@
                                 )}
                             </div>
                         </div>
+                        {/* Informes de Rendimentos */}
+                        {meusInformes.length > 0 && (
+                            <div className="mt-6">
+                                <div className="bg-white p-6 rounded-lg shadow-lg">
+                                    <h3 className="text-xl font-bold mb-4">
+                                        <i className="fas fa-file-invoice text-blue-500 mr-2"></i>Informes de Rendimentos
+                                    </h3>
+                                    <div className="space-y-2">
+                                        {[...meusInformes].sort((a, b) => parseInt(b.anoBase) - parseInt(a.anoBase)).map((inf, i) => (
+                                            <div key={i} className="p-3 bg-gray-50 rounded flex justify-between items-center cursor-pointer hover:bg-blue-50" onClick={() => onNavigate('informes')}>
+                                                <span><i className="fas fa-calendar mr-2 text-blue-500"></i>Ano-Base {inf.anoBase}</span>
+                                                <span className="font-bold text-green-600">{formatarMoeda(inf.totalRendimentos || 0)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
             }
@@ -1870,13 +1950,17 @@
             const [funcionarioSelecionado, setFuncionarioSelecionado] = useState('');
             const [mes, setMes] = useState(new Date().getMonth() + 1);
             const [ano, setAno] = useState(new Date().getFullYear());
+
+            // Helpers para sempre manter mes/ano como número
+            const handleSetMes = (val) => setMes(parseInt(val) || 1);
+            const handleSetAno = (val) => setAno(parseInt(val) || new Date().getFullYear());
             const [mostrarForm, setMostrarForm] = useState(false);
 
             const funcionariosFiltrados = usuarioLogado.tipo === 'admin' ? dados.funcionarios : dados.funcionarios.filter(f => f.id === usuarioLogado.id);
-            const holeriteFiltrado = dados.holerites.find(h => h.funcionarioId === parseInt(funcionarioSelecionado) && h.mes === parseInt(mes) && h.ano === parseInt(ano));
+            const holeriteFiltrado = dados.holerites.find(h => parseInt(h.funcionarioId) === parseInt(funcionarioSelecionado) && parseInt(h.mes) === parseInt(mes) && parseInt(h.ano) === parseInt(ano));
 
             const salvarHolerite = (holerite) => {
-                const existe = dados.holerites.find(h => h.funcionarioId === holerite.funcionarioId && h.mes === holerite.mes && h.ano === holerite.ano);
+                const existe = dados.holerites.find(h => parseInt(h.funcionarioId) === parseInt(holerite.funcionarioId) && parseInt(h.mes) === parseInt(holerite.mes) && parseInt(h.ano) === parseInt(holerite.ano));
                 if (existe) {
                     atualizar('holerites', dados.holerites.map(h => h.id === existe.id ? { ...holerite, id: existe.id } : h));
                 } else {
@@ -1899,13 +1983,13 @@
                             </div>
                             <div>
                                 <label className="block mb-2 font-medium">Mês</label>
-                                <select value={mes} onChange={(e) => setMes(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
+                                <select value={mes} onChange={(e) => handleSetMes(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
                                     {[...Array(12)].map((_, i) => <option key={i+1} value={i+1}>{new Date(2000, i, 1).toLocaleString('pt-BR', {month: 'long'})}</option>)}
                                 </select>
                             </div>
                             <div>
                                 <label className="block mb-2 font-medium">Ano</label>
-                                <input type="number" value={ano} onChange={(e) => setAno(e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
+                                <input type="number" value={ano} onChange={(e) => handleSetAno(e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
                             </div>
                             {usuarioLogado.tipo === 'admin' && funcionarioSelecionado && (
                                 <div className="flex items-end">
@@ -1974,10 +2058,10 @@
                                     </thead>
                                     <tbody>
                                         {dados.holerites
-                                            .filter(h => usuarioLogado.tipo === 'admin' || h.funcionarioId === usuarioLogado.id)
+                                            .filter(h => usuarioLogado.tipo === 'admin' || parseInt(h.funcionarioId) === parseInt(usuarioLogado.id))
                                             .sort((a, b) => {
-                                                if (b.ano !== a.ano) return b.ano - a.ano;
-                                                return b.mes - a.mes;
+                                                if (parseInt(b.ano) !== parseInt(a.ano)) return parseInt(b.ano) - parseInt(a.ano);
+                                                return parseInt(b.mes) - parseInt(a.mes);
                                             })
                                             .map(h => {
                                                 const func = dados.funcionarios.find(f => f.id === h.funcionarioId);
@@ -1999,8 +2083,8 @@
                                                             <button 
                                                                 onClick={() => {
                                                                     setFuncionarioSelecionado(h.funcionarioId.toString());
-                                                                    setMes(h.mes);
-                                                                    setAno(h.ano);
+                                                                    setMes(parseInt(h.mes));
+                                                                    setAno(parseInt(h.ano));
                                                                 }} 
                                                                 className="text-primary-600 hover:text-primary-800 mr-2"
                                                                 title="Visualizar"
@@ -2293,6 +2377,685 @@
         }
 
         // Continua no próximo bloco...
+
+        // INFORMES DE RENDIMENTOS - Informe anual por funcionário (modelo DIRF/Comprovante)
+        function InformesRendimentos({ dados, atualizar, usuarioLogado }) {
+            const [funcionarioSelecionado, setFuncionarioSelecionado] = useState('');
+            const [anoBase, setAnoBase] = useState(new Date().getFullYear() - 1);
+            const [mostrarForm, setMostrarForm] = useState(false);
+
+            const funcionariosFiltrados = usuarioLogado.tipo === 'admin' ? dados.funcionarios : dados.funcionarios.filter(f => f.id === usuarioLogado.id);
+            
+            const informes = (dados.informesRendimentos || []);
+            const informeFiltrado = informes.find(inf => parseInt(inf.funcionarioId) === parseInt(funcionarioSelecionado) && parseInt(inf.anoBase) === parseInt(anoBase));
+
+            const salvarInforme = (informe) => {
+                const existe = informes.find(inf => parseInt(inf.funcionarioId) === parseInt(informe.funcionarioId) && parseInt(inf.anoBase) === parseInt(informe.anoBase));
+                if (existe) {
+                    atualizar('informesRendimentos', informes.map(inf => inf.id === existe.id ? { ...informe, id: existe.id } : inf));
+                } else {
+                    atualizar('informesRendimentos', [...informes, { ...informe, id: Date.now() }]);
+                }
+                setMostrarForm(false);
+            };
+
+            const gerarInformePDF = (informe, func, emp) => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                const anoCalendario = parseInt(informe.anoBase);
+                const anoExercicio = anoCalendario + 1;
+
+                // Cabeçalho
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.text('COMPROVANTE DE RENDIMENTOS PAGOS E DE', 105, 15, { align: 'center' });
+                doc.text('IMPOSTO SOBRE A RENDA RETIDO NA FONTE', 105, 21, { align: 'center' });
+                doc.setFontSize(10);
+                doc.setFont(undefined, 'normal');
+                doc.text(`Ano-calendário: ${anoCalendario}`, 20, 30);
+                doc.text(`Exercício: ${anoExercicio}`, 120, 30);
+
+                // Fonte pagadora
+                doc.setFontSize(9);
+                doc.setFont(undefined, 'bold');
+                doc.text('1. FONTE PAGADORA - Pessoa Jurídica', 20, 40);
+                doc.setFont(undefined, 'normal');
+                doc.text(`CNPJ: ${emp?.cnpj || '-'}`, 20, 47);
+                doc.text(`Razão Social: ${emp?.razaoSocial || '-'}`, 20, 53);
+
+                // Beneficiário
+                doc.setFont(undefined, 'bold');
+                doc.text('2. PESSOA FÍSICA BENEFICIÁRIA DOS RENDIMENTOS', 20, 63);
+                doc.setFont(undefined, 'normal');
+                doc.text(`CPF: ${func?.cpf || '-'}`, 20, 70);
+                doc.text(`Nome: ${func?.nome || '-'}`, 20, 76);
+
+                // Rendimentos tributáveis
+                let y = 88;
+                doc.setFont(undefined, 'bold');
+                doc.text('3. RENDIMENTOS TRIBUTÁVEIS, DEDUÇÕES E IMPOSTO SOBRE A RENDA RETIDO NA FONTE', 20, y);
+                y += 8;
+                doc.setFont(undefined, 'normal');
+                
+                const linhas3 = [
+                    ['Total dos rendimentos (inclusive férias)', formatarMoeda(informe.totalRendimentos || 0)],
+                    ['Contribuição previdenciária oficial (INSS)', formatarMoeda(informe.contribuicaoPrevidenciaria || 0)],
+                    ['Contribuição a entidades de previdência complementar', formatarMoeda(informe.previdenciaComplementar || 0)],
+                    ['Pensão alimentícia', formatarMoeda(informe.pensaoAlimenticia || 0)],
+                    ['Imposto sobre a renda retido na fonte', formatarMoeda(informe.impostoRetido || 0)],
+                ];
+
+                linhas3.forEach(([desc, valor]) => {
+                    doc.text(desc, 22, y);
+                    doc.text(valor, 190, y, { align: 'right' });
+                    y += 7;
+                });
+
+                // Rendimentos isentos
+                y += 5;
+                doc.setFont(undefined, 'bold');
+                doc.text('4. RENDIMENTOS ISENTOS E NÃO TRIBUTÁVEIS', 20, y);
+                y += 8;
+                doc.setFont(undefined, 'normal');
+
+                const linhas4 = [
+                    ['Parcela isenta dos proventos de aposentadoria (65 anos ou mais)', formatarMoeda(informe.parcelaIsentaAposentadoria || 0)],
+                    ['Diárias e ajuda de custo', formatarMoeda(informe.diariasAjudaCusto || 0)],
+                    ['Pensão e proventos de aposentadoria ou reforma isentos', formatarMoeda(informe.pensaoIsenta || 0)],
+                    ['Lucros e dividendos recebidos', formatarMoeda(informe.lucrosDividendos || 0)],
+                    ['Indenizações por rescisão (inclusive FGTS/multa)', formatarMoeda(informe.indenizacaoRescisao || 0)],
+                    ['Outros rendimentos isentos', formatarMoeda(informe.outrosIsentos || 0)],
+                ];
+
+                linhas4.forEach(([desc, valor]) => {
+                    if (parseFloat(String(valor).replace(/[^\d,-]/g, '').replace(',', '.')) !== 0) {
+                        doc.text(desc, 22, y);
+                        doc.text(valor, 190, y, { align: 'right' });
+                        y += 7;
+                    }
+                });
+
+                // Rendimentos tributação exclusiva
+                y += 5;
+                doc.setFont(undefined, 'bold');
+                doc.text('5. RENDIMENTOS SUJEITOS A TRIBUTAÇÃO EXCLUSIVA (rendimento líquido)', 20, y);
+                y += 8;
+                doc.setFont(undefined, 'normal');
+
+                const linhas5 = [
+                    ['Décimo terceiro salário', formatarMoeda(informe.decimoTerceiro || 0)],
+                    ['IRRF sobre 13º salário', formatarMoeda(informe.irrfDecimoTerceiro || 0)],
+                    ['Outros', formatarMoeda(informe.outrosTributacaoExclusiva || 0)],
+                ];
+
+                linhas5.forEach(([desc, valor]) => {
+                    doc.text(desc, 22, y);
+                    doc.text(valor, 190, y, { align: 'right' });
+                    y += 7;
+                });
+
+                // Informações complementares
+                if (informe.informacoesComplementares) {
+                    y += 5;
+                    doc.setFont(undefined, 'bold');
+                    doc.text('6. INFORMAÇÕES COMPLEMENTARES', 20, y);
+                    y += 8;
+                    doc.setFont(undefined, 'normal');
+                    const linhasComp = doc.splitTextToSize(informe.informacoesComplementares, 170);
+                    doc.text(linhasComp, 22, y);
+                }
+
+                doc.save(`informe_rendimentos_${func?.nome}_${anoCalendario}.pdf`);
+            };
+
+            return (
+                <div>
+                    <h2 className="text-3xl font-bold mb-6">Informes de Rendimentos</h2>
+                    <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block mb-2 font-medium">Funcionário</label>
+                                <select value={funcionarioSelecionado} onChange={(e) => setFuncionarioSelecionado(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
+                                    <option value="">Selecione</option>
+                                    {funcionariosFiltrados.map(func => <option key={func.id} value={func.id}>{func.nome}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block mb-2 font-medium">Ano-Base</label>
+                                <input type="number" value={anoBase} onChange={(e) => setAnoBase(parseInt(e.target.value) || new Date().getFullYear() - 1)} className="w-full px-4 py-2 border rounded-lg" min="2020" max="2099" />
+                            </div>
+                            {usuarioLogado.tipo === 'admin' && funcionarioSelecionado && (
+                                <div className="flex items-end">
+                                    <button onClick={() => setMostrarForm(true)} className="w-full bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600">
+                                        <i className={`fas fa-${informeFiltrado ? 'edit' : 'plus'} mr-2`}></i>
+                                        {informeFiltrado ? 'Editar' : 'Cadastrar'} Informe
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {mostrarForm && usuarioLogado.tipo === 'admin' && (() => {
+                        const func = dados.funcionarios.find(f => f.id === parseInt(funcionarioSelecionado));
+                        const emp = func ? dados.empresas.find(e => e.id === parseInt(func.empresaId)) : null;
+                        return (
+                            <FormInformeRendimentos
+                                funcionarioId={parseInt(funcionarioSelecionado)}
+                                anoBase={parseInt(anoBase)}
+                                informe={informeFiltrado}
+                                onSalvar={salvarInforme}
+                                onCancelar={() => setMostrarForm(false)}
+                                funcionario={func}
+                                empresa={emp}
+                            />
+                        );
+                    })()}
+
+                    {informeFiltrado && !mostrarForm && (() => {
+                        const func = dados.funcionarios.find(f => f.id === parseInt(informeFiltrado.funcionarioId));
+                        const emp = func ? dados.empresas.find(e => e.id === parseInt(func.empresaId)) : null;
+                        return (
+                            <VisualizarInformeRendimentos
+                                informe={informeFiltrado}
+                                funcionario={func}
+                                empresa={emp}
+                                onGerarPDF={() => gerarInformePDF(informeFiltrado, func, emp)}
+                            />
+                        );
+                    })()}
+
+                    {!funcionarioSelecionado && (
+                        <div className="bg-white p-8 rounded-lg shadow-lg text-center text-gray-500">
+                            <i className="fas fa-file-invoice text-6xl mb-4"></i>
+                            <p>Selecione um funcionário e ano-base para visualizar o informe de rendimentos</p>
+                        </div>
+                    )}
+
+                    {informes.length > 0 && (
+                        <div className="bg-white p-6 rounded-lg shadow-lg mt-6">
+                            <h3 className="text-xl font-bold mb-4 flex items-center">
+                                <i className="fas fa-list text-primary-500 mr-2"></i>
+                                Todos os Informes Cadastrados
+                            </h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="text-left p-3">Funcionário</th>
+                                            <th className="text-left p-3">Ano-Base</th>
+                                            <th className="text-right p-3">Total Rendimentos</th>
+                                            <th className="text-right p-3">INSS</th>
+                                            <th className="text-right p-3">IR Retido</th>
+                                            <th className="text-center p-3">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {informes
+                                            .filter(inf => usuarioLogado.tipo === 'admin' || parseInt(inf.funcionarioId) === parseInt(usuarioLogado.id))
+                                            .sort((a, b) => parseInt(b.anoBase) - parseInt(a.anoBase))
+                                            .map(inf => {
+                                                const func = dados.funcionarios.find(f => f.id === parseInt(inf.funcionarioId));
+                                                const emp = func ? dados.empresas.find(e => e.id === parseInt(func.empresaId)) : null;
+                                                return (
+                                                    <tr key={inf.id} className="border-b hover:bg-gray-50">
+                                                        <td className="p-3">{func?.nome || '-'}</td>
+                                                        <td className="p-3">{inf.anoBase}</td>
+                                                        <td className="p-3 text-right text-green-600 font-medium">
+                                                            {formatarMoeda(inf.totalRendimentos || 0)}
+                                                        </td>
+                                                        <td className="p-3 text-right text-orange-600 font-medium">
+                                                            {formatarMoeda(inf.contribuicaoPrevidenciaria || 0)}
+                                                        </td>
+                                                        <td className="p-3 text-right text-red-600 font-medium">
+                                                            {formatarMoeda(inf.impostoRetido || 0)}
+                                                        </td>
+                                                        <td className="p-3 text-center">
+                                                            <button 
+                                                                onClick={() => {
+                                                                    setFuncionarioSelecionado(inf.funcionarioId.toString());
+                                                                    setAnoBase(parseInt(inf.anoBase));
+                                                                }} 
+                                                                className="text-primary-600 hover:text-primary-800 mr-2"
+                                                                title="Visualizar"
+                                                            >
+                                                                <i className="fas fa-eye"></i>
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => gerarInformePDF(inf, func, emp)}
+                                                                className="text-red-600 hover:text-red-800 mr-2"
+                                                                title="Baixar PDF"
+                                                            >
+                                                                <i className="fas fa-file-pdf"></i>
+                                                            </button>
+                                                            {usuarioLogado.tipo === 'admin' && (
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        if (confirm('Tem certeza que deseja excluir este informe?')) {
+                                                                            atualizar('informesRendimentos', informes.filter(i => i.id !== inf.id));
+                                                                        }
+                                                                    }} 
+                                                                    className="text-red-600 hover:text-red-800"
+                                                                    title="Excluir"
+                                                                >
+                                                                    <i className="fas fa-trash"></i>
+                                                                </button>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // FORMULÁRIO INFORME DE RENDIMENTOS
+        function FormInformeRendimentos({ funcionarioId, anoBase, informe, onSalvar, onCancelar, funcionario, empresa }) {
+            const fileInputRef = useRef(null);
+            const [formData, setFormData] = useState(informe || {
+                funcionarioId, anoBase,
+                // Rendimentos tributáveis
+                totalRendimentos: '',
+                contribuicaoPrevidenciaria: '',
+                previdenciaComplementar: '',
+                pensaoAlimenticia: '',
+                impostoRetido: '',
+                // Rendimentos isentos
+                parcelaIsentaAposentadoria: '',
+                diariasAjudaCusto: '',
+                pensaoIsenta: '',
+                lucrosDividendos: '',
+                indenizacaoRescisao: '',
+                outrosIsentos: '',
+                // Tributação exclusiva
+                decimoTerceiro: '',
+                irrfDecimoTerceiro: '',
+                outrosTributacaoExclusiva: '',
+                // Complementares
+                informacoesComplementares: '',
+                // Arquivo
+                arquivoBase64: null,
+                arquivoNome: null
+            });
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setFormData({ ...formData, arquivoBase64: reader.result, arquivoNome: file.name });
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSalvar(formData);
+            };
+
+            return (
+                <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+                    <h3 className="text-xl font-bold mb-4">
+                        {informe ? 'Editar' : 'Cadastrar'} Informe de Rendimentos - {funcionario?.nome} - Ano-Base {anoBase}
+                    </h3>
+                    <form onSubmit={handleSubmit}>
+                        {/* Seção 3 - Rendimentos Tributáveis */}
+                        <div className="mb-6">
+                            <h4 className="font-bold text-lg mb-3 text-blue-700">
+                                <i className="fas fa-coins mr-2"></i>3. Rendimentos Tributáveis, Deduções e IR Retido
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Total dos Rendimentos (incl. férias)</label>
+                                    <InputMoeda value={formData.totalRendimentos} 
+                                        onChange={(valor) => setFormData({...formData, totalRendimentos: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Contribuição Previdenciária (INSS)</label>
+                                    <InputMoeda value={formData.contribuicaoPrevidenciaria}
+                                        onChange={(valor) => setFormData({...formData, contribuicaoPrevidenciaria: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Previdência Complementar</label>
+                                    <InputMoeda value={formData.previdenciaComplementar}
+                                        onChange={(valor) => setFormData({...formData, previdenciaComplementar: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Pensão Alimentícia</label>
+                                    <InputMoeda value={formData.pensaoAlimenticia}
+                                        onChange={(valor) => setFormData({...formData, pensaoAlimenticia: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Imposto de Renda Retido na Fonte</label>
+                                    <InputMoeda value={formData.impostoRetido}
+                                        onChange={(valor) => setFormData({...formData, impostoRetido: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Seção 4 - Rendimentos Isentos */}
+                        <div className="mb-6">
+                            <h4 className="font-bold text-lg mb-3 text-green-700">
+                                <i className="fas fa-hand-holding-usd mr-2"></i>4. Rendimentos Isentos e Não Tributáveis
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Parcela Isenta Aposentadoria (65+)</label>
+                                    <InputMoeda value={formData.parcelaIsentaAposentadoria}
+                                        onChange={(valor) => setFormData({...formData, parcelaIsentaAposentadoria: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Diárias e Ajuda de Custo</label>
+                                    <InputMoeda value={formData.diariasAjudaCusto}
+                                        onChange={(valor) => setFormData({...formData, diariasAjudaCusto: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Pensão/Proventos Isentos</label>
+                                    <InputMoeda value={formData.pensaoIsenta}
+                                        onChange={(valor) => setFormData({...formData, pensaoIsenta: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Lucros e Dividendos</label>
+                                    <InputMoeda value={formData.lucrosDividendos}
+                                        onChange={(valor) => setFormData({...formData, lucrosDividendos: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Indenizações por Rescisão (incl. FGTS)</label>
+                                    <InputMoeda value={formData.indenizacaoRescisao}
+                                        onChange={(valor) => setFormData({...formData, indenizacaoRescisao: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Outros Rendimentos Isentos</label>
+                                    <InputMoeda value={formData.outrosIsentos}
+                                        onChange={(valor) => setFormData({...formData, outrosIsentos: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Seção 5 - Tributação Exclusiva */}
+                        <div className="mb-6">
+                            <h4 className="font-bold text-lg mb-3 text-purple-700">
+                                <i className="fas fa-percentage mr-2"></i>5. Rendimentos Sujeitos a Tributação Exclusiva
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">13º Salário</label>
+                                    <InputMoeda value={formData.decimoTerceiro}
+                                        onChange={(valor) => setFormData({...formData, decimoTerceiro: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">IRRF sobre 13º Salário</label>
+                                    <InputMoeda value={formData.irrfDecimoTerceiro}
+                                        onChange={(valor) => setFormData({...formData, irrfDecimoTerceiro: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label className="block mb-2 font-medium text-sm">Outros</label>
+                                    <InputMoeda value={formData.outrosTributacaoExclusiva}
+                                        onChange={(valor) => setFormData({...formData, outrosTributacaoExclusiva: valor})}
+                                        className="w-full px-4 py-2 border rounded-lg" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Seção 6 - Informações Complementares */}
+                        <div className="mb-6">
+                            <h4 className="font-bold text-lg mb-3 text-gray-700">
+                                <i className="fas fa-info-circle mr-2"></i>6. Informações Complementares
+                            </h4>
+                            <textarea value={formData.informacoesComplementares || ''} 
+                                onChange={(e) => setFormData({...formData, informacoesComplementares: e.target.value})}
+                                className="w-full px-4 py-2 border rounded-lg" rows="3"
+                                placeholder="Informações adicionais (opcional)" />
+                        </div>
+
+                        {/* Upload de arquivo */}
+                        <div className="mb-6">
+                            <h4 className="font-bold text-lg mb-3 text-gray-700">
+                                <i className="fas fa-paperclip mr-2"></i>Arquivo do Informe (opcional)
+                            </h4>
+                            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".pdf,.jpg,.png" className="w-full px-4 py-2 border rounded-lg" />
+                            {formData.arquivoNome && (
+                                <p className="text-sm text-green-600 mt-2"><i className="fas fa-check mr-1"></i>{formData.arquivoNome}</p>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end gap-4">
+                            <button type="submit" className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600">
+                                <i className="fas fa-save mr-2"></i>Salvar Informe
+                            </button>
+                            <button type="button" onClick={onCancelar} className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+            );
+        }
+
+        // VISUALIZAR INFORME DE RENDIMENTOS
+        function VisualizarInformeRendimentos({ informe, funcionario, empresa, onGerarPDF }) {
+            const anoCalendario = parseInt(informe.anoBase);
+            const anoExercicio = anoCalendario + 1;
+
+            const baixarArquivo = () => {
+                if (informe.arquivoBase64) {
+                    const link = document.createElement('a');
+                    link.href = informe.arquivoBase64;
+                    link.download = informe.arquivoNome || `informe_rendimentos_${funcionario?.nome}_${anoCalendario}.pdf`;
+                    link.click();
+                }
+            };
+
+            const totalIsentos = parseFloat(informe.parcelaIsentaAposentadoria || 0) + 
+                parseFloat(informe.diariasAjudaCusto || 0) + parseFloat(informe.pensaoIsenta || 0) +
+                parseFloat(informe.lucrosDividendos || 0) + parseFloat(informe.indenizacaoRescisao || 0) +
+                parseFloat(informe.outrosIsentos || 0);
+
+            return (
+                <div className="bg-white p-6 rounded-lg shadow-lg">
+                    {/* Cabeçalho */}
+                    <div className="border-b-2 border-blue-600 pb-4 mb-6">
+                        <div className="text-center">
+                            <h3 className="text-lg font-bold text-blue-800">COMPROVANTE DE RENDIMENTOS PAGOS E DE</h3>
+                            <h3 className="text-lg font-bold text-blue-800">IMPOSTO SOBRE A RENDA RETIDO NA FONTE</h3>
+                            <div className="flex justify-center gap-8 mt-2 text-sm text-gray-600">
+                                <span>Ano-calendário: <strong>{anoCalendario}</strong></span>
+                                <span>Exercício: <strong>{anoExercicio}</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Fonte Pagadora */}
+                    <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <h4 className="font-bold text-blue-800 mb-3">
+                            <i className="fas fa-building mr-2"></i>1. FONTE PAGADORA - Pessoa Jurídica
+                        </h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <p className="text-sm text-gray-600">CNPJ</p>
+                                <p className="font-bold">{empresa?.cnpj || '-'}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Razão Social</p>
+                                <p className="font-bold">{empresa?.razaoSocial || '-'}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Beneficiário */}
+                    <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <h4 className="font-bold text-gray-800 mb-3">
+                            <i className="fas fa-user mr-2"></i>2. PESSOA FÍSICA BENEFICIÁRIA DOS RENDIMENTOS
+                        </h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <p className="text-sm text-gray-600">CPF</p>
+                                <p className="font-bold">{funcionario?.cpf || '-'}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Nome Completo</p>
+                                <p className="font-bold">{funcionario?.nome || '-'}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Seção 3 - Rendimentos Tributáveis */}
+                    <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <h4 className="font-bold text-blue-800 mb-3">
+                            <i className="fas fa-coins mr-2"></i>3. RENDIMENTOS TRIBUTÁVEIS, DEDUÇÕES E IMPOSTO RETIDO
+                        </h4>
+                        <div className="space-y-2">
+                            <div className="flex justify-between p-2 bg-white rounded">
+                                <span>Total dos rendimentos (inclusive férias)</span>
+                                <span className="font-bold text-green-600">{formatarMoeda(informe.totalRendimentos || 0)}</span>
+                            </div>
+                            <div className="flex justify-between p-2 bg-white rounded">
+                                <span>Contribuição previdenciária oficial (INSS)</span>
+                                <span className="font-bold text-orange-600">{formatarMoeda(informe.contribuicaoPrevidenciaria || 0)}</span>
+                            </div>
+                            {parseFloat(informe.previdenciaComplementar || 0) > 0 && (
+                                <div className="flex justify-between p-2 bg-white rounded">
+                                    <span>Contribuição a entidades de previdência complementar</span>
+                                    <span className="font-bold">{formatarMoeda(informe.previdenciaComplementar)}</span>
+                                </div>
+                            )}
+                            {parseFloat(informe.pensaoAlimenticia || 0) > 0 && (
+                                <div className="flex justify-between p-2 bg-white rounded">
+                                    <span>Pensão alimentícia</span>
+                                    <span className="font-bold">{formatarMoeda(informe.pensaoAlimenticia)}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between p-2 bg-red-50 rounded">
+                                <span>Imposto sobre a renda retido na fonte</span>
+                                <span className="font-bold text-red-600">{formatarMoeda(informe.impostoRetido || 0)}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Seção 4 - Rendimentos Isentos */}
+                    {totalIsentos > 0 && (
+                        <div className="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                            <h4 className="font-bold text-green-800 mb-3">
+                                <i className="fas fa-hand-holding-usd mr-2"></i>4. RENDIMENTOS ISENTOS E NÃO TRIBUTÁVEIS
+                            </h4>
+                            <div className="space-y-2">
+                                {parseFloat(informe.parcelaIsentaAposentadoria || 0) > 0 && (
+                                    <div className="flex justify-between p-2 bg-white rounded">
+                                        <span>Parcela isenta dos proventos de aposentadoria (65+)</span>
+                                        <span className="font-bold">{formatarMoeda(informe.parcelaIsentaAposentadoria)}</span>
+                                    </div>
+                                )}
+                                {parseFloat(informe.diariasAjudaCusto || 0) > 0 && (
+                                    <div className="flex justify-between p-2 bg-white rounded">
+                                        <span>Diárias e ajuda de custo</span>
+                                        <span className="font-bold">{formatarMoeda(informe.diariasAjudaCusto)}</span>
+                                    </div>
+                                )}
+                                {parseFloat(informe.pensaoIsenta || 0) > 0 && (
+                                    <div className="flex justify-between p-2 bg-white rounded">
+                                        <span>Pensão e proventos isentos</span>
+                                        <span className="font-bold">{formatarMoeda(informe.pensaoIsenta)}</span>
+                                    </div>
+                                )}
+                                {parseFloat(informe.lucrosDividendos || 0) > 0 && (
+                                    <div className="flex justify-between p-2 bg-white rounded">
+                                        <span>Lucros e dividendos recebidos</span>
+                                        <span className="font-bold">{formatarMoeda(informe.lucrosDividendos)}</span>
+                                    </div>
+                                )}
+                                {parseFloat(informe.indenizacaoRescisao || 0) > 0 && (
+                                    <div className="flex justify-between p-2 bg-white rounded">
+                                        <span>Indenizações por rescisão (incl. FGTS/multa)</span>
+                                        <span className="font-bold">{formatarMoeda(informe.indenizacaoRescisao)}</span>
+                                    </div>
+                                )}
+                                {parseFloat(informe.outrosIsentos || 0) > 0 && (
+                                    <div className="flex justify-between p-2 bg-white rounded">
+                                        <span>Outros rendimentos isentos</span>
+                                        <span className="font-bold">{formatarMoeda(informe.outrosIsentos)}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between p-2 bg-green-100 rounded font-bold">
+                                    <span>Total Isentos</span>
+                                    <span className="text-green-700">{formatarMoeda(totalIsentos)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Seção 5 - Tributação Exclusiva */}
+                    {(parseFloat(informe.decimoTerceiro || 0) > 0 || parseFloat(informe.outrosTributacaoExclusiva || 0) > 0) && (
+                        <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                            <h4 className="font-bold text-purple-800 mb-3">
+                                <i className="fas fa-percentage mr-2"></i>5. RENDIMENTOS SUJEITOS A TRIBUTAÇÃO EXCLUSIVA
+                            </h4>
+                            <div className="space-y-2">
+                                {parseFloat(informe.decimoTerceiro || 0) > 0 && (
+                                    <div className="flex justify-between p-2 bg-white rounded">
+                                        <span>13º Salário</span>
+                                        <span className="font-bold">{formatarMoeda(informe.decimoTerceiro)}</span>
+                                    </div>
+                                )}
+                                {parseFloat(informe.irrfDecimoTerceiro || 0) > 0 && (
+                                    <div className="flex justify-between p-2 bg-white rounded">
+                                        <span>IRRF sobre 13º Salário</span>
+                                        <span className="font-bold text-red-600">{formatarMoeda(informe.irrfDecimoTerceiro)}</span>
+                                    </div>
+                                )}
+                                {parseFloat(informe.outrosTributacaoExclusiva || 0) > 0 && (
+                                    <div className="flex justify-between p-2 bg-white rounded">
+                                        <span>Outros</span>
+                                        <span className="font-bold">{formatarMoeda(informe.outrosTributacaoExclusiva)}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Seção 6 - Informações Complementares */}
+                    {informe.informacoesComplementares && (
+                        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <h4 className="font-bold text-gray-800 mb-3">
+                                <i className="fas fa-info-circle mr-2"></i>6. INFORMAÇÕES COMPLEMENTARES
+                            </h4>
+                            <p className="text-gray-700 whitespace-pre-wrap">{informe.informacoesComplementares}</p>
+                        </div>
+                    )}
+
+                    {/* Ações */}
+                    <div className="mt-6 flex justify-end gap-4">
+                        {informe.arquivoBase64 && (
+                            <button onClick={baixarArquivo} className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700">
+                                <i className="fas fa-download mr-2"></i>Baixar Arquivo Original
+                            </button>
+                        )}
+                        <button onClick={onGerarPDF} className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700">
+                            <i className="fas fa-file-pdf mr-2"></i>Gerar PDF
+                        </button>
+                        <button onClick={() => window.print()} className="bg-primary-500 text-white px-6 py-2 rounded-lg hover:bg-primary-600">
+                            <i className="fas fa-print mr-2"></i>Imprimir
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
         // REGISTRO DE JORNADA - Com edição, filtros e geração de PDF
         function RegistroJornada({ dados, atualizar, usuarioLogado }) {
             const [dataRegistro, setDataRegistro] = useState(new Date().toISOString().split('T')[0]);
@@ -2356,6 +3119,20 @@
                 
                 // Adiciona o registro usando updater funcional para evitar dados obsoletos
                 atualizar('registrosPonto', prev => [...prev, novoRegistro]);
+                
+                // 🔒 SALVAMENTO IMEDIATO no Firebase para registro de ponto (sem debounce)
+                // Previne perda de dados se o usuário fechar a página rapidamente
+                setTimeout(() => {
+                    try {
+                        const dadosAtuais = JSON.parse(localStorage.getItem('sistemaRH_v2'));
+                        if (dadosAtuais) {
+                            FirebaseStorage.saveAll(dadosAtuais);
+                            console.log('🔒 Ponto salvo imediatamente no Firebase');
+                        }
+                    } catch(e) {
+                        console.error('⚠️ Erro ao forçar salvamento do ponto:', e);
+                    }
+                }, 100); // Pequeno delay para garantir que localStorage já foi atualizado pelo useEffect
                 
                 // Mensagem de sucesso
                 alert('✅ Ponto registrado com sucesso!\n\n' +
@@ -2493,6 +3270,13 @@
                                     id: idUnico, 
                                     timestamp 
                                 }]);
+                                // Salvamento imediato no Firebase para ponto
+                                setTimeout(() => {
+                                    try {
+                                        const dadosAtuais = JSON.parse(localStorage.getItem('sistemaRH_v2'));
+                                        if (dadosAtuais) FirebaseStorage.saveAll(dadosAtuais);
+                                    } catch(e) { console.error('Erro ao salvar ponto:', e); }
+                                }, 100);
                                 setMostrarForm(false);
                             }}
                             onCancelar={() => setMostrarForm(false)}
